@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Caelora — World Map</title>
+
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #111;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            cursor: grab;
+        }
+
+        #map:active {
+            cursor: grabbing;
+        }
+
+        #map img {
+            display: block;
+            width: 1920px;
+            max-width: none;
+            height: auto;
+        }
+    </style>
+</head>
+
+<body>
+
+<div id="map">
+    <img src="caelora.svg" alt="Map of Caelora">
+</div>
+
+</body>
+</html>
