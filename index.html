@@ -17,7 +17,6 @@
             font-family: Georgia, serif;
         }
 
-        /* Map viewing area */
         #map-container {
             width: 100%;
             height: 100%;
@@ -30,7 +29,6 @@
             cursor: grabbing;
         }
 
-        /* The map itself */
         #map {
             position: absolute;
             left: 0;
@@ -42,7 +40,6 @@
             pointer-events: none;
         }
 
-        /* Controls */
         #controls {
             position: fixed;
             top: 20px;
@@ -68,7 +65,6 @@
             background: rgba(70, 70, 70, 0.95);
         }
 
-        /* Title */
         #title {
             position: fixed;
             top: 20px;
@@ -113,63 +109,223 @@
         let startX = 0;
         let startY = 0;
 
-        function updateMap() {
-            map.style.transform =
-                `translate(${x}px, ${y}px) scale(${scale})`;
+        const MAP_WIDTH = 1920;
+
+        /*
+         * Keep the map from becoming smaller than the
+         * size of the viewing window.
+         */
+
+        function getMinimumScale() {
+
+            const containerWidth = container.clientWidth;
+            const containerHeight = container.clientHeight;
+
+            const mapHeight = MAP_WIDTH * (1080 / 1920);
+
+            const scaleX = containerWidth / MAP_WIDTH;
+            const scaleY = containerHeight / mapHeight;
+
+            return Math.max(scaleX, scaleY);
         }
 
-        /* Zoom buttons */
 
-        document.getElementById("zoomIn").addEventListener("click", function () {
-            scale *= 1.25;
-            updateMap();
-        });
+        /*
+         * Keep the map inside the viewing window.
+         */
 
-        document.getElementById("zoomOut").addEventListener("click", function () {
-            scale /= 1.25;
+        function constrainPosition() {
 
-            if (scale < 0.2) {
-                scale = 0.2;
+            const containerWidth = container.clientWidth;
+            const containerHeight = container.clientHeight;
+
+            const mapWidth = MAP_WIDTH * scale;
+            const mapHeight = (MAP_WIDTH * (1080 / 1920)) * scale;
+
+            /*
+             * Horizontal limits
+             */
+
+            if (mapWidth <= containerWidth) {
+
+                x = (containerWidth - mapWidth) / 2;
+
+            } else {
+
+                const minX = containerWidth - mapWidth;
+
+                if (x > 0) x = 0;
+                if (x < minX) x = minX;
+
             }
 
+
+            /*
+             * Vertical limits
+             */
+
+            if (mapHeight <= containerHeight) {
+
+                y = (containerHeight - mapHeight) / 2;
+
+            } else {
+
+                const minY = containerHeight - mapHeight;
+
+                if (y > 0) y = 0;
+                if (y < minY) y = minY;
+
+            }
+
+        }
+
+
+        function updateMap() {
+
+            const minimumScale = getMinimumScale();
+
+            if (scale < minimumScale) {
+                scale = minimumScale;
+            }
+
+            constrainPosition();
+
+            map.style.transform =
+                `translate(${x}px, ${y}px) scale(${scale})`;
+
+        }
+
+
+        /*
+         * Reset
+         */
+
+        function resetMap() {
+
+            scale = getMinimumScale();
+
+            const containerWidth = container.clientWidth;
+            const containerHeight = container.clientHeight;
+
+            const mapWidth = MAP_WIDTH * scale;
+            const mapHeight = (MAP_WIDTH * (1080 / 1920)) * scale;
+
+            x = (containerWidth - mapWidth) / 2;
+            y = (containerHeight - mapHeight) / 2;
+
             updateMap();
+
+        }
+
+
+        /*
+         * Zoom toward a particular screen position
+         */
+
+        function zoomAt(screenX, screenY, zoomFactor) {
+
+            const oldScale = scale;
+
+            let newScale = scale * zoomFactor;
+
+            const minimumScale = getMinimumScale();
+
+            if (newScale < minimumScale) {
+                newScale = minimumScale;
+            }
+
+            if (newScale > 8) {
+                newScale = 8;
+            }
+
+            if (newScale === oldScale) return;
+
+            /*
+             * Find the map coordinate underneath the cursor
+             */
+
+            const mapX = (screenX - x) / oldScale;
+            const mapY = (screenY - y) / oldScale;
+
+            scale = newScale;
+
+            /*
+             * Keep that same point underneath
+             * the cursor after zooming
+             */
+
+            x = screenX - mapX * scale;
+            y = screenY - mapY * scale;
+
+            updateMap();
+
+        }
+
+
+        /*
+         * Zoom buttons
+         */
+
+        document.getElementById("zoomIn").addEventListener("click", function () {
+
+            const centerX = container.clientWidth / 2;
+            const centerY = container.clientHeight / 2;
+
+            zoomAt(centerX, centerY, 1.25);
+
         });
 
-        /* Reset button */
+
+        document.getElementById("zoomOut").addEventListener("click", function () {
+
+            const centerX = container.clientWidth / 2;
+            const centerY = container.clientHeight / 2;
+
+            zoomAt(centerX, centerY, 0.8);
+
+        });
+
+
+        /*
+         * Reset button
+         */
 
         document.getElementById("reset").addEventListener("click", function () {
-            scale = 1;
-            x = 0;
-            y = 0;
-            updateMap();
+
+            resetMap();
+
         });
 
-        /* Mouse wheel zoom */
+
+        /*
+         * Mouse-wheel zoom
+         */
 
         container.addEventListener("wheel", function (event) {
 
             event.preventDefault();
 
+            const rect = container.getBoundingClientRect();
+
+            const mouseX = event.clientX - rect.left;
+            const mouseY = event.clientY - rect.top;
+
             if (event.deltaY < 0) {
-                scale *= 1.15;
+
+                zoomAt(mouseX, mouseY, 1.15);
+
             } else {
-                scale /= 1.15;
-            }
 
-            if (scale < 0.2) {
-                scale = 0.2;
-            }
+                zoomAt(mouseX, mouseY, 0.87);
 
-            if (scale > 8) {
-                scale = 8;
             }
-
-            updateMap();
 
         }, { passive: false });
 
 
-        /* Dragging */
+        /*
+         * Mouse dragging
+         */
 
         container.addEventListener("mousedown", function (event) {
 
@@ -180,9 +336,13 @@
 
         });
 
+
         window.addEventListener("mouseup", function () {
+
             dragging = false;
+
         });
+
 
         window.addEventListener("mousemove", function (event) {
 
@@ -196,7 +356,9 @@
         });
 
 
-        /* Touchscreen support */
+        /*
+         * Touch support
+         */
 
         let touchStartX = 0;
         let touchStartY = 0;
@@ -210,6 +372,7 @@
 
         });
 
+
         container.addEventListener("touchmove", function (event) {
 
             if (event.touches.length !== 1) return;
@@ -218,6 +381,30 @@
             y = event.touches[0].clientY - touchStartY;
 
             updateMap();
+
+        });
+
+
+        /*
+         * Recalculate everything when the
+         * browser window changes size.
+         */
+
+        window.addEventListener("resize", function () {
+
+            updateMap();
+
+        });
+
+
+        /*
+         * Wait for the SVG to load before
+         * setting the initial position.
+         */
+
+        map.addEventListener("load", function () {
+
+            resetMap();
 
         });
 
