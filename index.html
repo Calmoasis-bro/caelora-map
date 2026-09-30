@@ -1,13 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
 <meta charset="UTF-8">
-
-<meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <title>Caelora — Interactive Map</title>
 
@@ -23,21 +18,41 @@ body {
     font-family: Arial, sans-serif;
 }
 
+
+/* ============================================================
+   MAP CONTAINER
+   ============================================================ */
+
 #map-container {
+
     position: relative;
+
     width: 100%;
     height: 100%;
+
     overflow: hidden;
+
     cursor: grab;
+
     background: #111;
+
+    touch-action: none;
 }
+
 
 #map-container.dragging {
     cursor: grabbing;
 }
 
+
+/* ============================================================
+   INLINE SVG MAP
+   ============================================================ */
+
 #map {
+
     position: absolute;
+
     left: 0;
     top: 0;
 
@@ -47,31 +62,66 @@ body {
     transform-origin: 0 0;
 
     user-select: none;
+
     pointer-events: none;
 
     border: 0;
+
+    display: block;
 }
 
+
+/*
+   The SVG itself is inserted into this element.
+
+   Keeping the SVG inline is important because JavaScript
+   can then access the actual burgIcons / labels / layers
+   contained inside caelora.svg.
+*/
+
+#map svg {
+
+    display: block;
+
+    width: 1920px;
+    height: 1080px;
+
+    overflow: visible;
+}
+
+
+/* ============================================================
+   CONTROLS
+   ============================================================ */
+
 #controls {
+
     position: absolute;
+
     top: 15px;
     left: 15px;
 
-    z-index: 20;
+    z-index: 100;
 
     display: flex;
+
     flex-direction: column;
+
     gap: 6px;
 }
 
+
 #controls button {
+
     width: 42px;
     height: 42px;
 
     border: 1px solid rgba(255,255,255,0.25);
+
     border-radius: 6px;
 
-    background: rgba(20,20,20,0.8);
+    background: rgba(20,20,20,0.82);
+
     color: white;
 
     font-size: 22px;
@@ -79,19 +129,35 @@ body {
     cursor: pointer;
 
     backdrop-filter: blur(4px);
+
+    -webkit-backdrop-filter: blur(4px);
 }
+
 
 #controls button:hover {
-    background: rgba(60,60,60,0.9);
+
+    background: rgba(60,60,60,0.92);
 }
 
+
+#controls button:active {
+
+    transform: scale(0.96);
+}
+
+
+/* ============================================================
+   ZOOM DISPLAY
+   ============================================================ */
+
 #zoom-level {
+
     position: absolute;
 
     bottom: 15px;
     left: 15px;
 
-    z-index: 20;
+    z-index: 100;
 
     padding: 6px 10px;
 
@@ -106,40 +172,144 @@ body {
     pointer-events: none;
 }
 
+
+/* ============================================================
+   LOADING MESSAGE
+   ============================================================ */
+
+#loading {
+
+    position: absolute;
+
+    inset: 0;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    z-index: 200;
+
+    color: white;
+
+    background: #111;
+
+    font-size: 16px;
+
+    transition: opacity 0.25s ease;
+}
+
+
+#loading.hidden {
+
+    opacity: 0;
+
+    pointer-events: none;
+}
+
+
+/* ============================================================
+   ERROR MESSAGE
+   ============================================================ */
+
+#error {
+
+    position: absolute;
+
+    inset: 0;
+
+    z-index: 300;
+
+    display: none;
+
+    align-items: center;
+
+    justify-content: center;
+
+    padding: 30px;
+
+    box-sizing: border-box;
+
+    color: white;
+
+    background: #111;
+
+    text-align: center;
+
+    line-height: 1.5;
+}
+
 </style>
 </head>
 
 
 <body>
 
+
 <div id="map-container">
 
-    <object
-        id="map"
-        data="caelora.svg"
-        type="image/svg+xml">
-    </object>
+    <div id="loading">
+        Loading Caelora…
+    </div>
+
+    <div id="error"></div>
+
+    <!--
+        The SVG is loaded into this element by JavaScript.
+
+        This is intentionally NOT an <object>.
+
+        Inline SVG lets us access the actual Azgaar layers
+        contained in caelora.svg.
+    -->
+
+    <div id="map"></div>
+
+
+    <!-- =====================================================
+         CONTROLS
+         ===================================================== -->
 
     <div id="controls">
 
-        <button id="zoom-in">+</button>
+        <button
+            id="zoom-in"
+            type="button"
+            aria-label="Zoom in">
+            +
+        </button>
 
-        <button id="zoom-out">−</button>
+        <button
+            id="zoom-out"
+            type="button"
+            aria-label="Zoom out">
+            −
+        </button>
 
-        <button id="reset">⌂</button>
+        <button
+            id="reset"
+            type="button"
+            aria-label="Reset map">
+            ⌂
+        </button>
 
     </div>
 
-    <div id="zoom-level">100%</div>
+
+    <div id="zoom-level">
+        100%
+    </div>
 
 </div>
 
 
 <script>
 
-/* ==========================================================
-   MAP SETTINGS
-========================================================== */
+
+/* ============================================================
+   BASIC ELEMENTS
+   ============================================================ */
 
 const container =
     document.getElementById("map-container");
@@ -150,213 +320,859 @@ const map =
 const zoomText =
     document.getElementById("zoom-level");
 
+const loading =
+    document.getElementById("loading");
+
+const errorBox =
+    document.getElementById("error");
+
+
+/* ============================================================
+   MAP SIZE
+   ============================================================ */
+
+/*
+   These are the dimensions of the supplied Azgaar SVG.
+
+   Do not change these unless the SVG itself changes.
+*/
 
 const MAP_WIDTH = 1920;
-
 const MAP_HEIGHT = 1080;
 
 
-const MAX_ZOOM = 8;
+/* ============================================================
+   ZOOM SETTINGS
+   ============================================================ */
 
-let MIN_ZOOM = 0.15;
+/*
+   This controls how far the viewer can zoom.
+
+   20x is deliberately high enough to allow you to inspect
+   individual settlements.
+
+   The original map artwork itself is NOT enlarged or redrawn.
+   We are simply zooming the SVG.
+*/
+
+const MAX_ZOOM = 20;
+
+let MIN_ZOOM = 0.1;
 
 let scale = 1;
 
 
-/* ==========================================================
+/* ============================================================
    MAP POSITION
-========================================================== */
+   ============================================================ */
 
 let posX = 0;
-
 let posY = 0;
 
 
-/* ==========================================================
+/* ============================================================
    DRAGGING
-========================================================== */
+   ============================================================ */
 
 let dragging = false;
 
 let dragStartX = 0;
-
 let dragStartY = 0;
 
 let startPosX = 0;
-
 let startPosY = 0;
 
 
-/* ==========================================================
+/* ============================================================
    TOUCH
-========================================================== */
+   ============================================================ */
 
 let touchStartX = 0;
-
 let touchStartY = 0;
 
 let touchStartPosX = 0;
-
 let touchStartPosY = 0;
 
 let lastTouchDistance = null;
 
 
-/* ==========================================================
-   FIND SVG ELEMENT
-========================================================== */
+/* ============================================================
+   SVG DOCUMENT REFERENCE
+   ============================================================ */
 
-function findSVGElement(svg, id) {
-
-    return (
-        svg.getElementById(id) ||
-        svg.querySelector("#" + id)
-    );
-
-}
+let svgRoot = null;
 
 
-/* ==========================================================
-   UPDATE AZGAAR DETAIL
-========================================================== */
+/* ============================================================
+   BURG INFORMATION
+   ============================================================ */
 
-function updateSVGDetail() {
+/*
+   IMPORTANT:
+
+   We DO NOT create replacement settlement graphics.
+
+   Your supplied SVG already contains:
+
+       #icons
+           #burgIcons
+               #village
+               #fort
+               #town
+               #city
+               #capital
+
+   We leave those graphics intact.
+
+   The only thing we do is control when they are visible
+   and, at higher zoom levels, preserve their original
+   position while increasing their existing native scale.
+
+   This prevents the previous "white dot" problem caused
+   by replacing the complete transform.
+*/
+
+
+const BURG_GROUPS = [
+
+    "village",
+    "fort",
+    "town",
+    "city",
+    "capital"
+
+];
+
+
+/*
+   Zoom thresholds.
+
+   At low zoom levels the tiny settlement symbols are hidden,
+   just like a detailed map viewer.
+
+   As the user gets closer, progressively more settlement
+   categories appear.
+*/
+
+const BURG_VISIBILITY = {
+
+    village: 3.0,
+
+    fort: 2.2,
+
+    town: 1.9,
+
+    city: 1.35,
+
+    capital: 1.0
+
+};
+
+
+/*
+   Extra visual scaling.
+
+   These values are deliberately modest.
+
+   The important difference from the previous version is
+   that we multiply the ORIGINAL scale instead of replacing
+   the complete transform.
+
+   Therefore:
+
+       translate(x,y) scale(original)
+
+   becomes:
+
+       translate(x,y) scale(original * multiplier)
+
+   rather than becoming simply:
+
+       scale(newValue)
+
+   which would destroy the settlement position.
+*/
+
+const BURG_SCALE = {
+
+    village: 1.8,
+
+    fort: 1.8,
+
+    town: 1.65,
+
+    city: 1.45,
+
+    capital: 1.25
+
+};
+
+
+/*
+   Store original transforms here.
+
+   Key:
+       burg element
+
+   Value:
+       original transform string
+*/
+
+const originalBurgTransforms =
+    new WeakMap();
+
+
+/* ============================================================
+   LOAD SVG
+   ============================================================ */
+
+async function loadMapSVG() {
 
     try {
 
-        const svg =
-            map.contentDocument;
-
-        if (!svg) {
-            return;
-        }
-
-
         /*
-         * ----------------------------------------------------
-         * IMPORTANT:
-         *
-         * The main "icons" layer is NEVER hidden.
-         *
-         * These are the existing state / major settlement
-         * symbols and should remain visible at every zoom.
-         * ----------------------------------------------------
-         */
+           Fetch the exact SVG sitting beside index.html.
 
-        const mainIcons =
-            findSVGElement(
-                svg,
-                "icons"
+           Therefore your repository should contain:
+
+               index.html
+               caelora.svg
+        */
+
+        const response =
+            await fetch("caelora.svg", {
+                cache: "no-cache"
+            });
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                "Could not load caelora.svg (" +
+                response.status +
+                ")"
             );
-
-        if (mainIcons) {
-
-            mainIcons.style.display = "";
-
-            mainIcons.style.visibility = "visible";
-
-            mainIcons.style.opacity = "1";
         }
 
 
-        /*
-         * ----------------------------------------------------
-         * BURG ICONS
-         *
-         * These are the smaller settlement symbols.
-         *
-         * They are deliberately hidden when zoomed out and
-         * revealed when the player zooms into the map.
-         * ----------------------------------------------------
-         */
+        const svgText =
+            await response.text();
 
-        const burgIcons =
-            findSVGElement(
-                svg,
-                "burgIcons"
+
+        /*
+           Parse the SVG as XML.
+        */
+
+        const parser =
+            new DOMParser();
+
+
+        const svgDocument =
+            parser.parseFromString(
+                svgText,
+                "image/svg+xml"
             );
 
 
-        if (burgIcons) {
+        /*
+           Check for XML parsing errors.
+        */
 
-            /*
-             * World / regional view
-             */
-
-            if (scale < 1.8) {
-
-                burgIcons.style.display = "none";
-
-                burgIcons.style.visibility = "hidden";
-
-                burgIcons.style.opacity = "0";
-
-            }
+        const parserError =
+            svgDocument.querySelector(
+                "parsererror"
+            );
 
 
-            /*
-             * Medium zoom
-             */
+        if (parserError) {
 
-            else if (scale < 2.8) {
-
-                burgIcons.style.display = "";
-
-                burgIcons.style.visibility = "visible";
-
-                burgIcons.style.opacity = "1";
-
-            }
-
-
-            /*
-             * Close zoom
-             */
-
-            else {
-
-                burgIcons.style.display = "";
-
-                burgIcons.style.visibility = "visible";
-
-                burgIcons.style.opacity = "1";
-
-            }
-
+            throw new Error(
+                "The SVG could not be parsed."
+            );
         }
 
-    }
 
-    catch (error) {
+        const importedSVG =
+            svgDocument.documentElement;
+
+
+        if (
+            !importedSVG ||
+            importedSVG.nodeName.toLowerCase() !== "svg"
+        ) {
+
+            throw new Error(
+                "caelora.svg does not contain a valid SVG."
+            );
+        }
+
 
         /*
-         * SVG may not have finished loading yet.
-         */
+           Import the SVG into the page.
+
+           This is what allows us to access its internal
+           Azgaar layers.
+        */
+
+        const liveSVG =
+            document.importNode(
+                importedSVG,
+                true
+            );
+
+
+        map.appendChild(liveSVG);
+
+
+        svgRoot = liveSVG;
+
+
+        /*
+           Prepare the existing burg elements.
+        */
+
+        prepareBurgs();
+
+
+        /*
+           Make sure the map is displayed.
+        */
+
+        loading.classList.add("hidden");
+
+
+        /*
+           Calculate the initial map size.
+        */
+
+        calculateMinZoom();
+
+
+        scale = MIN_ZOOM;
+
+
+        /*
+           Centre the map.
+        */
+
+        centreMap();
+
+
+        updateMap();
+
+
+    } catch (error) {
+
+        console.error(error);
+
+
+        loading.classList.add("hidden");
+
+
+        errorBox.style.display = "flex";
+
+
+        errorBox.innerHTML =
+            `
+            <div>
+                <strong>Could not load the Caelora map.</strong>
+                <br><br>
+                ${escapeHTML(error.message)}
+                <br><br>
+                Make sure <strong>caelora.svg</strong>
+                is in the same GitHub Pages folder as
+                <strong>index.html</strong>.
+            </div>
+            `;
 
     }
 
 }
 
 
-/* ==========================================================
+/* ============================================================
+   ESCAPE HTML FOR ERROR MESSAGE
+   ============================================================ */
+
+function escapeHTML(value) {
+
+    return String(value)
+
+        .replaceAll("&", "&amp;")
+
+        .replaceAll("<", "&lt;")
+
+        .replaceAll(">", "&gt;")
+
+        .replaceAll('"', "&quot;")
+
+        .replaceAll("'", "&#039;");
+}
+
+
+/* ============================================================
+   PREPARE BURGS
+   ============================================================ */
+
+function prepareBurgs() {
+
+    if (!svgRoot) return;
+
+
+    /*
+       Find the actual Azgaar burgIcons container.
+    */
+
+    const burgIcons =
+        svgRoot.querySelector(
+            "#burgIcons"
+        );
+
+
+    if (!burgIcons) {
+
+        console.warn(
+            "No #burgIcons group found in caelora.svg."
+        );
+
+        return;
+    }
+
+
+    /*
+       Process every original settlement group.
+    */
+
+    BURG_GROUPS.forEach(
+        function(groupName) {
+
+            const group =
+                svgRoot.querySelector(
+                    "#" + groupName
+                );
+
+
+            if (!group) {
+
+                console.warn(
+                    "Burg group not found:",
+                    groupName
+                );
+
+                return;
+            }
+
+
+            /*
+               The SVG already contains all of the
+               actual settlement graphics.
+
+               We preserve them.
+            */
+
+            const burgs =
+                group.querySelectorAll(
+                    "use"
+                );
+
+
+            burgs.forEach(
+                function(burg) {
+
+                    /*
+                       Save the exact original transform.
+                    */
+
+                    if (
+                        !originalBurgTransforms.has(
+                            burg
+                        )
+                    ) {
+
+                        originalBurgTransforms.set(
+                            burg,
+                            burg.getAttribute(
+                                "transform"
+                            ) || ""
+                        );
+                    }
+
+                }
+            );
+
+        }
+    );
+
+
+    /*
+       Do the same for settlement labels.
+
+       Labels are handled separately because they are
+       text rather than icons.
+    */
+
+    prepareBurgLabels();
+}
+
+
+/* ============================================================
+   PREPARE BURG LABELS
+   ============================================================ */
+
+function prepareBurgLabels() {
+
+    if (!svgRoot) return;
+
+
+    const labels =
+        svgRoot.querySelector(
+            "#labels"
+        );
+
+
+    if (!labels) return;
+
+
+    /*
+       We don't modify the actual text.
+
+       We simply allow the viewer to progressively reveal
+       the existing labels.
+    */
+
+    const burgLabels =
+        labels.querySelectorAll(
+            '[data-label-type="burg"]'
+        );
+
+
+    burgLabels.forEach(
+        function(label) {
+
+            /*
+               Keep the original SVG styling.
+
+               We only store the original opacity so
+               it can be restored.
+            */
+
+            if (
+                !label.dataset.originalOpacity
+            ) {
+
+                label.dataset.originalOpacity =
+                    label.style.opacity ||
+                    "1";
+            }
+
+        }
+    );
+}
+
+
+/* ============================================================
+   UPDATE BURG DETAIL
+   ============================================================ */
+
+function updateBurgDetail() {
+
+    if (!svgRoot) return;
+
+
+    /*
+       --------------------------------------------------------
+       BURG ICONS
+       --------------------------------------------------------
+    */
+
+    BURG_GROUPS.forEach(
+        function(groupName) {
+
+            const group =
+                svgRoot.querySelector(
+                    "#" + groupName
+                );
+
+
+            if (!group) return;
+
+
+            const threshold =
+                BURG_VISIBILITY[groupName];
+
+
+            /*
+               Hide/show the existing group.
+
+               We are NOT creating replacement icons.
+            */
+
+            const visible =
+                scale >= threshold;
+
+
+            group.style.opacity =
+                visible ? "1" : "0";
+
+
+            /*
+               At higher zoom, preserve the original
+               translate() and multiply ONLY its scale().
+            */
+
+            const multiplier =
+                BURG_SCALE[groupName];
+
+
+            const burgs =
+                group.querySelectorAll(
+                    "use"
+                );
+
+
+            burgs.forEach(
+                function(burg) {
+
+                    const original =
+                        originalBurgTransforms.get(
+                            burg
+                        );
+
+
+                    if (!original) return;
+
+
+                    /*
+                       At normal visibility threshold,
+                       use the exact original Azgaar transform.
+
+                       At deeper zoom, increase the icon's
+                       native scale without touching its
+                       coordinates.
+                    */
+
+                    let extraScale = 1;
+
+
+                    if (visible) {
+
+                        /*
+                           Gradually increase the scale
+                           as the viewer gets closer.
+
+                           This remains restrained so the
+                           symbols don't become giant.
+                        */
+
+                        const depth =
+                            Math.max(
+                                0,
+                                Math.min(
+                                    1,
+                                    (scale - threshold) /
+                                    4
+                                )
+                            );
+
+
+                        extraScale =
+                            1 +
+                            (multiplier - 1) *
+                            depth;
+
+                    }
+
+
+                    burg.setAttribute(
+                        "transform",
+                        multiplySVGTransformScale(
+                            original,
+                            extraScale
+                        )
+                    );
+
+                }
+            );
+
+        }
+    );
+
+
+    /*
+       --------------------------------------------------------
+       BURG LABELS
+       --------------------------------------------------------
+    */
+
+    updateBurgLabels();
+}
+
+
+/* ============================================================
+   MULTIPLY ONLY THE SCALE PART OF AN SVG TRANSFORM
+   ============================================================ */
+
+function multiplySVGTransformScale(
+    transform,
+    multiplier
+) {
+
+    /*
+       Azgaar's burg transforms in your supplied SVG look
+       like:
+
+           translate(1861.7,961.68) scale(0.07)
+
+       or:
+
+           translate(710.61,947.46) scale(0.2)
+
+       We preserve translate() exactly.
+
+       We ONLY multiply the existing scale.
+    */
+
+
+    const scaleMatch =
+        transform.match(
+            /scale\s*\(\s*([-+0-9.eE]+)(?:\s*,\s*([-+0-9.eE]+))?\s*\)/
+        );
+
+
+    if (!scaleMatch) {
+
+        /*
+           If for some reason a burg has no scale()
+           in its original transform, don't modify it.
+        */
+
+        return transform;
+    }
+
+
+    const sx =
+        parseFloat(
+            scaleMatch[1]
+        );
+
+
+    const sy =
+        scaleMatch[2] !== undefined
+
+            ? parseFloat(
+                scaleMatch[2]
+              )
+
+            : sx;
+
+
+    const newSX =
+        sx * multiplier;
+
+
+    const newSY =
+        sy * multiplier;
+
+
+    const newScale =
+        `scale(${newSX},${newSY})`;
+
+
+    return transform.replace(
+        scaleMatch[0],
+        newScale
+    );
+}
+
+
+/* ============================================================
+   BURG LABEL DETAIL
+   ============================================================ */
+
+function updateBurgLabels() {
+
+    if (!svgRoot) return;
+
+
+    const labels =
+        svgRoot.querySelector(
+            "#labels"
+        );
+
+
+    if (!labels) return;
+
+
+    const burgLabels =
+        labels.querySelectorAll(
+            '[data-label-type="burg"]'
+        );
+
+
+    burgLabels.forEach(
+        function(label) {
+
+            /*
+               Labels begin appearing after the settlement
+               icons become visible.
+
+               The original label text and font remain untouched.
+            */
+
+            let opacity = 0;
+
+
+            if (scale >= 2.2) {
+
+                opacity = 1;
+
+            } else if (scale >= 1.5) {
+
+                opacity =
+                    (
+                        scale - 1.5
+                    ) /
+                    (
+                        2.2 - 1.5
+                    );
+
+            }
+
+
+            label.style.opacity =
+                opacity;
+
+        }
+    );
+}
+
+
+/* ============================================================
    CALCULATE MINIMUM ZOOM
-========================================================== */
+   ============================================================ */
 
 function calculateMinZoom() {
 
-    const width =
+    const containerWidth =
         container.clientWidth;
 
-    const height =
+    const containerHeight =
         container.clientHeight;
 
 
     const scaleX =
-        width / MAP_WIDTH;
+        containerWidth /
+        MAP_WIDTH;
+
 
     const scaleY =
-        height / MAP_HEIGHT;
+        containerHeight /
+        MAP_HEIGHT;
 
+
+    /*
+       Use the larger value so the entire map fits.
+    */
 
     MIN_ZOOM =
         Math.max(
@@ -365,25 +1181,64 @@ function calculateMinZoom() {
         );
 
 
+    /*
+       Prevent an absurdly tiny value on unusual screens.
+    */
+
     MIN_ZOOM =
         Math.max(
             MIN_ZOOM,
             0.15
         );
-
 }
 
 
-/* ==========================================================
-   KEEP MAP INSIDE VIEW
-========================================================== */
+/* ============================================================
+   CENTRE MAP
+   ============================================================ */
+
+function centreMap() {
+
+    const containerWidth =
+        container.clientWidth;
+
+    const containerHeight =
+        container.clientHeight;
+
+
+    const scaledWidth =
+        MAP_WIDTH * scale;
+
+
+    const scaledHeight =
+        MAP_HEIGHT * scale;
+
+
+    posX =
+        (
+            containerWidth -
+            scaledWidth
+        ) / 2;
+
+
+    posY =
+        (
+            containerHeight -
+            scaledHeight
+        ) / 2;
+}
+
+
+/* ============================================================
+   CONSTRAIN POSITION
+   ============================================================ */
 
 function constrainPosition() {
 
-    const width =
+    const containerWidth =
         container.clientWidth;
 
-    const height =
+    const containerHeight =
         container.clientHeight;
 
 
@@ -394,75 +1249,110 @@ function constrainPosition() {
         MAP_HEIGHT * scale;
 
 
-    if (scaledWidth <= width) {
+    /*
+       Horizontal.
+    */
+
+    if (
+        scaledWidth <=
+        containerWidth
+    ) {
 
         posX =
-            (width - scaledWidth) / 2;
+            (
+                containerWidth -
+                scaledWidth
+            ) / 2;
 
-    }
-
-    else {
+    } else {
 
         const minX =
-            width - scaledWidth;
+            containerWidth -
+            scaledWidth;
+
 
         posX =
             Math.max(
                 minX,
-                Math.min(posX, 0)
+                Math.min(
+                    posX,
+                    0
+                )
             );
-
     }
 
 
-    if (scaledHeight <= height) {
+    /*
+       Vertical.
+    */
+
+    if (
+        scaledHeight <=
+        containerHeight
+    ) {
 
         posY =
-            (height - scaledHeight) / 2;
+            (
+                containerHeight -
+                scaledHeight
+            ) / 2;
 
-    }
-
-    else {
+    } else {
 
         const minY =
-            height - scaledHeight;
+            containerHeight -
+            scaledHeight;
+
 
         posY =
             Math.max(
                 minY,
-                Math.min(posY, 0)
+                Math.min(
+                    posY,
+                    0
+                )
             );
-
     }
-
 }
 
 
-/* ==========================================================
+/* ============================================================
    UPDATE MAP
-========================================================== */
+   ============================================================ */
 
 function updateMap() {
 
     constrainPosition();
 
 
+    /*
+       Apply the zoom/pan to the entire SVG.
+
+       The SVG artwork itself remains unchanged.
+    */
+
     map.style.transform =
         `translate(${posX}px, ${posY}px) scale(${scale})`;
 
 
     zoomText.textContent =
-        Math.round(scale * 100) + "%";
+        Math.round(
+            scale * 100
+        ) + "%";
 
 
-    updateSVGDetail();
+    /*
+       Update settlement detail AFTER changing the
+       viewer zoom.
+    */
 
+    updateBurgDetail();
 }
 
 
-/* ==========================================================
-   ZOOM AT POINT
-========================================================== */
+/* ============================================================
+   ZOOM AROUND POINT
+   ============================================================ */
 
 function zoomAt(
     screenX,
@@ -480,16 +1370,33 @@ function zoomAt(
         );
 
 
+    /*
+       Convert screen coordinates into map coordinates
+       before changing zoom.
+    */
+
     const mapX =
-        (screenX - posX) / scale;
+        (
+            screenX -
+            posX
+        ) / scale;
+
 
     const mapY =
-        (screenY - posY) / scale;
+        (
+            screenY -
+            posY
+        ) / scale;
 
 
     scale =
         newScale;
 
+
+    /*
+       Keep the point underneath the mouse/finger
+       stationary while zooming.
+    */
 
     posX =
         screenX -
@@ -502,13 +1409,12 @@ function zoomAt(
 
 
     updateMap();
-
 }
 
 
-/* ==========================================================
-   MOUSE WHEEL
-========================================================== */
+/* ============================================================
+   MOUSE WHEEL ZOOM
+   ============================================================ */
 
 container.addEventListener(
     "wheel",
@@ -531,6 +1437,13 @@ container.addEventListener(
             rect.top;
 
 
+        /*
+           Smooth-ish stepped zoom.
+
+           1.25 = zoom in
+           0.8  = zoom out
+        */
+
         const zoomFactor =
             event.deltaY < 0
                 ? 1.25
@@ -550,17 +1463,16 @@ container.addEventListener(
 );
 
 
-/* ==========================================================
-   MOUSE DOWN
-========================================================== */
+/* ============================================================
+   MOUSE DRAGGING
+   ============================================================ */
 
 container.addEventListener(
     "mousedown",
     function(event) {
 
-        if (event.button !== 0) {
+        if (event.button !== 0)
             return;
-        }
 
 
         dragging = true;
@@ -574,12 +1486,14 @@ container.addEventListener(
         dragStartX =
             event.clientX;
 
+
         dragStartY =
             event.clientY;
 
 
         startPosX =
             posX;
+
 
         startPosY =
             posY;
@@ -588,17 +1502,12 @@ container.addEventListener(
 );
 
 
-/* ==========================================================
-   MOUSE MOVE
-========================================================== */
-
 window.addEventListener(
     "mousemove",
     function(event) {
 
-        if (!dragging) {
+        if (!dragging)
             return;
-        }
 
 
         posX =
@@ -623,15 +1532,12 @@ window.addEventListener(
 );
 
 
-/* ==========================================================
-   MOUSE UP
-========================================================== */
-
 window.addEventListener(
     "mouseup",
     function() {
 
         dragging = false;
+
 
         container.classList.remove(
             "dragging"
@@ -641,16 +1547,17 @@ window.addEventListener(
 );
 
 
-/* ==========================================================
+/* ============================================================
    TOUCH START
-========================================================== */
+   ============================================================ */
 
 container.addEventListener(
     "touchstart",
     function(event) {
 
         if (
-            event.touches.length === 1
+            event.touches.length ===
+            1
         ) {
 
             const touch =
@@ -660,12 +1567,14 @@ container.addEventListener(
             touchStartX =
                 touch.clientX;
 
+
             touchStartY =
                 touch.clientY;
 
 
             touchStartPosX =
                 posX;
+
 
             touchStartPosY =
                 posY;
@@ -677,14 +1586,14 @@ container.addEventListener(
         }
 
         else if (
-            event.touches.length === 2
+            event.touches.length ===
+            2
         ) {
 
             lastTouchDistance =
                 getTouchDistance(
                     event.touches
                 );
-
         }
 
     },
@@ -694,9 +1603,9 @@ container.addEventListener(
 );
 
 
-/* ==========================================================
+/* ============================================================
    TOUCH MOVE
-========================================================== */
+   ============================================================ */
 
 container.addEventListener(
     "touchmove",
@@ -706,11 +1615,12 @@ container.addEventListener(
 
 
         /*
-         * PAN
-         */
+           ONE FINGER = PAN
+        */
 
         if (
-            event.touches.length === 1
+            event.touches.length ===
+            1
         ) {
 
             const touch =
@@ -739,11 +1649,12 @@ container.addEventListener(
 
 
         /*
-         * PINCH ZOOM
-         */
+           TWO FINGERS = ZOOM
+        */
 
         else if (
-            event.touches.length === 2
+            event.touches.length ===
+            2
         ) {
 
             const distance =
@@ -753,7 +1664,8 @@ container.addEventListener(
 
 
             if (
-                lastTouchDistance !== null
+                lastTouchDistance !==
+                null
             ) {
 
                 const factor =
@@ -767,16 +1679,20 @@ container.addEventListener(
 
                 const centerX =
                     (
-                        event.touches[0].clientX +
-                        event.touches[1].clientX
+                        event.touches[0]
+                            .clientX +
+                        event.touches[1]
+                            .clientX
                     ) / 2 -
                     rect.left;
 
 
                 const centerY =
                     (
-                        event.touches[0].clientY +
-                        event.touches[1].clientY
+                        event.touches[0]
+                            .clientY +
+                        event.touches[1]
+                            .clientY
                     ) / 2 -
                     rect.top;
 
@@ -786,13 +1702,11 @@ container.addEventListener(
                     centerY,
                     scale * factor
                 );
-
             }
 
 
             lastTouchDistance =
                 distance;
-
         }
 
     },
@@ -802,9 +1716,9 @@ container.addEventListener(
 );
 
 
-/* ==========================================================
+/* ============================================================
    TOUCH END
-========================================================== */
+   ============================================================ */
 
 container.addEventListener(
     "touchend",
@@ -813,13 +1727,16 @@ container.addEventListener(
         lastTouchDistance =
             null;
 
+    },
+    {
+        passive: false
     }
 );
 
 
-/* ==========================================================
+/* ============================================================
    TOUCH DISTANCE
-========================================================== */
+   ============================================================ */
 
 function getTouchDistance(
     touches
@@ -839,13 +1756,12 @@ function getTouchDistance(
         dx * dx +
         dy * dy
     );
-
 }
 
 
-/* ==========================================================
+/* ============================================================
    ZOOM IN BUTTON
-========================================================== */
+   ============================================================ */
 
 document
     .getElementById("zoom-in")
@@ -854,11 +1770,13 @@ document
         function() {
 
             const centerX =
-                container.clientWidth / 2;
+                container.clientWidth /
+                2;
 
 
             const centerY =
-                container.clientHeight / 2;
+                container.clientHeight /
+                2;
 
 
             zoomAt(
@@ -871,9 +1789,9 @@ document
     );
 
 
-/* ==========================================================
+/* ============================================================
    ZOOM OUT BUTTON
-========================================================== */
+   ============================================================ */
 
 document
     .getElementById("zoom-out")
@@ -882,11 +1800,13 @@ document
         function() {
 
             const centerX =
-                container.clientWidth / 2;
+                container.clientWidth /
+                2;
 
 
             const centerY =
-                container.clientHeight / 2;
+                container.clientHeight /
+                2;
 
 
             zoomAt(
@@ -899,9 +1819,9 @@ document
     );
 
 
-/* ==========================================================
-   RESET
-========================================================== */
+/* ============================================================
+   RESET / HOME
+   ============================================================ */
 
 document
     .getElementById("reset")
@@ -916,9 +1836,7 @@ document
                 MIN_ZOOM;
 
 
-            posX = 0;
-
-            posY = 0;
+            centreMap();
 
 
             updateMap();
@@ -927,9 +1845,9 @@ document
     );
 
 
-/* ==========================================================
-   RESIZE
-========================================================== */
+/* ============================================================
+   WINDOW RESIZE
+   ============================================================ */
 
 window.addEventListener(
     "resize",
@@ -939,7 +1857,8 @@ window.addEventListener(
 
 
         if (
-            scale < MIN_ZOOM
+            scale <
+            MIN_ZOOM
         ) {
 
             scale =
@@ -954,62 +1873,11 @@ window.addEventListener(
 );
 
 
-/* ==========================================================
-   SVG LOADED
-========================================================== */
+/* ============================================================
+   START
+   ============================================================ */
 
-map.addEventListener(
-    "load",
-    function() {
-
-        calculateMinZoom();
-
-
-        scale =
-            MIN_ZOOM;
-
-
-        const width =
-            container.clientWidth;
-
-
-        const height =
-            container.clientHeight;
-
-
-        const scaledWidth =
-            MAP_WIDTH * scale;
-
-
-        const scaledHeight =
-            MAP_HEIGHT * scale;
-
-
-        posX =
-            (
-                width -
-                scaledWidth
-            ) / 2;
-
-
-        posY =
-            (
-                height -
-                scaledHeight
-            ) / 2;
-
-
-        updateMap();
-
-    }
-);
-
-
-/* ==========================================================
-   INITIALISE
-========================================================== */
-
-calculateMinZoom();
+loadMapSVG();
 
 </script>
 
