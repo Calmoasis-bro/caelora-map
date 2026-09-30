@@ -1,132 +1,185 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0">
 
 <title>Caelora — Interactive Map</title>
 
+
 <style>
 
-    html, body {
-        margin: 0;
-        width: 100%;
-        height: 100%;
-        overflow: hidden;
-        background: #111;
-        font-family: Arial, sans-serif;
-    }
+html,
+body {
+
+    margin: 0;
+
+    width: 100%;
+    height: 100%;
+
+    overflow: hidden;
+
+    background: #111;
+
+    font-family: Arial, sans-serif;
+}
 
 
-    #map-container {
-        position: relative;
-        width: 100%;
-        height: 100%;
-        overflow: hidden;
-        cursor: grab;
-        background: #111;
-    }
+#map-container {
+
+    position: relative;
+
+    width: 100%;
+    height: 100%;
+
+    overflow: hidden;
+
+    cursor: grab;
+
+    background: #111;
+}
 
 
-    #map-container.dragging {
-        cursor: grabbing;
-    }
+#map-container.dragging {
+
+    cursor: grabbing;
+}
 
 
-    #map {
-        position: absolute;
-        left: 0;
-        top: 0;
+/*
+    The SVG itself.
 
-        width: 1920px;
-        height: 1080px;
+    The SVG is inserted directly into this element,
+    allowing JavaScript to access all of Azgaar's
+    existing layers.
+*/
 
-        transform-origin: 0 0;
+#map {
 
-        user-select: none;
-        pointer-events: none;
+    position: absolute;
 
-        border: 0;
-    }
+    left: 0;
+    top: 0;
 
+    width: 1920px;
+    height: 1080px;
 
-    #controls {
-        position: absolute;
-        top: 15px;
-        left: 15px;
+    transform-origin: 0 0;
 
-        z-index: 20;
+    user-select: none;
 
-        display: flex;
-        flex-direction: column;
-
-        gap: 6px;
-    }
+    pointer-events: none;
+}
 
 
-    #controls button {
-        width: 42px;
-        height: 42px;
+/* ---------------------------------------------------------
+   CONTROLS
+--------------------------------------------------------- */
 
-        border: 1px solid rgba(255,255,255,0.25);
-        border-radius: 6px;
+#controls {
 
-        background: rgba(20,20,20,0.8);
-        color: white;
+    position: absolute;
 
-        font-size: 22px;
-        cursor: pointer;
+    top: 15px;
+    left: 15px;
 
-        backdrop-filter: blur(4px);
-    }
+    z-index: 100;
+
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 6px;
+}
 
 
-    #controls button:hover {
-        background: rgba(60,60,60,0.9);
-    }
+#controls button {
+
+    width: 42px;
+    height: 42px;
+
+    border: 1px solid rgba(255,255,255,0.25);
+
+    border-radius: 6px;
+
+    background: rgba(20,20,20,0.8);
+
+    color: white;
+
+    font-size: 22px;
+
+    cursor: pointer;
+
+    backdrop-filter: blur(4px);
+}
 
 
-    #zoom-level {
-        position: absolute;
-        bottom: 15px;
-        left: 15px;
+#controls button:hover {
 
-        z-index: 20;
+    background: rgba(60,60,60,0.9);
+}
 
-        padding: 6px 10px;
 
-        color: white;
-        background: rgba(20,20,20,0.75);
+/* ---------------------------------------------------------
+   ZOOM DISPLAY
+--------------------------------------------------------- */
 
-        border-radius: 5px;
+#zoom-level {
 
-        font-size: 13px;
+    position: absolute;
 
-        pointer-events: none;
-    }
+    bottom: 15px;
+    left: 15px;
+
+    z-index: 100;
+
+    padding: 6px 10px;
+
+    color: white;
+
+    background: rgba(20,20,20,0.75);
+
+    border-radius: 5px;
+
+    font-size: 13px;
+
+    pointer-events: none;
+}
 
 </style>
+
 </head>
 
 
 <body>
 
+
 <div id="map-container">
 
-    <object
-        id="map"
-        data="caelora.svg"
-        type="image/svg+xml">
-    </object>
+
+    <!--
+        The actual SVG will be loaded into here.
+    -->
+
+    <div id="map"></div>
 
 
     <div id="controls">
 
-        <button id="zoom-in">+</button>
+        <button id="zoom-in">
+            +
+        </button>
 
-        <button id="zoom-out">−</button>
+        <button id="zoom-out">
+            −
+        </button>
 
-        <button id="reset">⌂</button>
+        <button id="reset">
+            ⌂
+        </button>
 
     </div>
 
@@ -135,14 +188,16 @@
         100%
     </div>
 
+
 </div>
+
 
 
 <script>
 
 
 // ============================================================
-// BASIC REFERENCES
+// BASIC VARIABLES
 // ============================================================
 
 const container =
@@ -156,7 +211,7 @@ const zoomText =
 
 
 // ============================================================
-// MAP SIZE
+// AZGAAR MAP SIZE
 // ============================================================
 
 const MAP_WIDTH = 1920;
@@ -165,27 +220,19 @@ const MAP_HEIGHT = 1080;
 
 
 // ============================================================
-// ZOOM SETTINGS
+// ZOOM
 // ============================================================
 
-// Maximum zoom.
-//
-// This allows extremely close views of individual regions.
-
-const MAX_ZOOM = 12;
-
-
-// Minimum zoom is calculated automatically.
+const MAX_ZOOM = 25;
 
 let MIN_ZOOM = 0.1;
-
-
-// Current zoom level.
 
 let scale = 1;
 
 
-// Map position.
+// ============================================================
+// POSITION
+// ============================================================
 
 let posX = 0;
 
@@ -208,45 +255,282 @@ let startPosY = 0;
 
 
 // ============================================================
-// SVG DETAIL SETTINGS
+// BURG CONFIGURATION
 // ============================================================
 //
-// These are the approximate screen sizes we want the
-// different settlement symbols to have.
+// These control when each type of settlement becomes visible.
 //
-// The original Azgaar SVG stores them extremely small.
-// We compensate for that here.
-//
+// These are deliberately separate so we can tune them later.
 // ============================================================
 
-const BURG_SETTINGS = {
+const BURG_LEVELS = {
 
-    village: {
-        showAt: 2.0,
-        size: 7
-    },
+    capital: 1.2,
 
-    fort: {
-        showAt: 1.5,
-        size: 9
-    },
+    city: 1.5,
 
-    town: {
-        showAt: 1.7,
-        size: 8
-    },
+    town: 2.0,
 
-    city: {
-        showAt: 1.3,
-        size: 11
-    },
+    fort: 2.0,
 
-    capital: {
-        showAt: 1.1,
-        size: 13
-    }
+    village: 2.8
 
 };
+
+
+// ============================================================
+// BURG SIZES
+// ============================================================
+//
+// Target size in SCREEN pixels.
+//
+// The SVG's original burgs are tiny because Azgaar normally
+// controls their appearance through its own zoom system.
+// ============================================================
+
+const BURG_SIZES = {
+
+    capital: 14,
+
+    city: 11,
+
+    town: 8,
+
+    fort: 9,
+
+    village: 6
+
+};
+
+
+// ============================================================
+// LOAD THE SVG
+// ============================================================
+
+async function loadMap() {
+
+    try {
+
+        const response =
+            await fetch("caelora.svg");
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                "Could not load caelora.svg"
+            );
+        }
+
+
+        const svgText =
+            await response.text();
+
+
+        /*
+            Parse the SVG.
+
+            This gives us a real SVG DOM rather than an
+            <object> whose internal document we have to access.
+        */
+
+        const parser =
+            new DOMParser();
+
+
+        const svgDocument =
+            parser.parseFromString(
+                svgText,
+                "image/svg+xml"
+            );
+
+
+        const svg =
+            svgDocument.documentElement;
+
+
+        /*
+            Put the SVG directly into the page.
+        */
+
+        map.appendChild(
+            document.importNode(
+                svg,
+                true
+            )
+        );
+
+
+        /*
+            Make sure the SVG retains the original
+            1920 × 1080 coordinate system.
+        */
+
+        const svgElement =
+            map.querySelector("svg");
+
+
+        svgElement.setAttribute(
+            "width",
+            MAP_WIDTH
+        );
+
+
+        svgElement.setAttribute(
+            "height",
+            MAP_HEIGHT
+        );
+
+
+        svgElement.style.display =
+            "block";
+
+
+        /*
+            Now that the SVG exists in the page,
+            we can directly manipulate its layers.
+        */
+
+        setupBurgs();
+
+
+        calculateMinZoom();
+
+
+        scale =
+            MIN_ZOOM;
+
+
+        centerMap();
+
+
+        updateMap();
+
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Caelora map failed to load:",
+            error
+        );
+
+        map.innerHTML =
+            "<p style='color:white;padding:20px'>" +
+            "Could not load caelora.svg." +
+            "</p>";
+    }
+}
+
+
+// ============================================================
+// FIND BURG LAYERS
+// ============================================================
+
+function setupBurgs() {
+
+    const svg =
+        map.querySelector("svg");
+
+
+    if (!svg) {
+        return;
+    }
+
+
+    /*
+        These are the actual groups contained in your SVG.
+    */
+
+    const types = [
+
+        "capital",
+        "city",
+        "town",
+        "fort",
+        "village"
+
+    ];
+
+
+    types.forEach(function(type) {
+
+        const group =
+            svg.querySelector(
+                "#" + type
+            );
+
+
+        if (!group) {
+
+            console.warn(
+                "Could not find burg group:",
+                type
+            );
+
+            return;
+        }
+
+
+        /*
+            Store the original transforms.
+
+            This is extremely important.
+
+            We never destroy Azgaar's original coordinates.
+        */
+
+        const uses =
+            group.querySelectorAll(
+                "use"
+            );
+
+
+        uses.forEach(function(use) {
+
+            const transform =
+                use.getAttribute(
+                    "transform"
+                );
+
+
+            if (transform) {
+
+                use.dataset.originalTransform =
+                    transform;
+            }
+
+        });
+
+    });
+
+
+    /*
+        Find the label layers too.
+
+        Azgaar stores these separately from the icons.
+    */
+
+    const labelGroups =
+        svg.querySelectorAll(
+            '[id^="labels-"]'
+        );
+
+
+    labelGroups.forEach(function(group) {
+
+        group.dataset.caeloraLabels =
+            "true";
+
+    });
+
+
+    console.log(
+        "Caelora burg system loaded."
+    );
+
+}
 
 
 // ============================================================
@@ -255,100 +539,156 @@ const BURG_SETTINGS = {
 
 function calculateMinZoom() {
 
-    const containerWidth =
+    const width =
         container.clientWidth;
 
-    const containerHeight =
+    const height =
         container.clientHeight;
 
 
     const scaleX =
-        containerWidth / MAP_WIDTH;
+        width / MAP_WIDTH;
+
 
     const scaleY =
-        containerHeight / MAP_HEIGHT;
+        height / MAP_HEIGHT;
 
 
     MIN_ZOOM =
-        Math.max(scaleX, scaleY);
+        Math.max(
+            scaleX,
+            scaleY
+        );
 
-
-    // Never allow the map to become excessively small.
 
     MIN_ZOOM =
-        Math.max(MIN_ZOOM, 0.15);
+        Math.max(
+            MIN_ZOOM,
+            0.15
+        );
 }
 
 
 // ============================================================
-// LIMIT MAP POSITION
+// CENTER MAP
 // ============================================================
 
-function constrainPosition() {
+function centerMap() {
 
-    const containerWidth =
+    const width =
         container.clientWidth;
 
-    const containerHeight =
+    const height =
         container.clientHeight;
 
 
     const scaledWidth =
         MAP_WIDTH * scale;
 
+
     const scaledHeight =
         MAP_HEIGHT * scale;
 
 
-    // Horizontal position
+    posX =
+        (
+            width -
+            scaledWidth
+        ) / 2;
 
-    if (scaledWidth <= containerWidth) {
+
+    posY =
+        (
+            height -
+            scaledHeight
+        ) / 2;
+}
+
+
+// ============================================================
+// KEEP MAP ON SCREEN
+// ============================================================
+
+function constrainPosition() {
+
+    const width =
+        container.clientWidth;
+
+    const height =
+        container.clientHeight;
+
+
+    const scaledWidth =
+        MAP_WIDTH * scale;
+
+
+    const scaledHeight =
+        MAP_HEIGHT * scale;
+
+
+    if (
+        scaledWidth <= width
+    ) {
 
         posX =
-            (containerWidth - scaledWidth) / 2;
+            (
+                width -
+                scaledWidth
+            ) / 2;
 
     }
 
     else {
 
         const minX =
-            containerWidth - scaledWidth;
+            width -
+            scaledWidth;
 
 
         posX =
             Math.max(
                 minX,
-                Math.min(posX, 0)
+                Math.min(
+                    posX,
+                    0
+                )
             );
     }
 
 
-    // Vertical position
-
-    if (scaledHeight <= containerHeight) {
+    if (
+        scaledHeight <= height
+    ) {
 
         posY =
-            (containerHeight - scaledHeight) / 2;
+            (
+                height -
+                scaledHeight
+            ) / 2;
 
     }
 
     else {
 
         const minY =
-            containerHeight - scaledHeight;
+            height -
+            scaledHeight;
 
 
         posY =
             Math.max(
                 minY,
-                Math.min(posY, 0)
+                Math.min(
+                    posY,
+                    0
+                )
             );
     }
 }
 
 
 // ============================================================
-// APPLY MAP TRANSFORM
+// UPDATE MAP
 // ============================================================
 
 function updateMap() {
@@ -361,260 +701,202 @@ function updateMap() {
 
 
     zoomText.textContent =
-        Math.round(scale * 100) + "%";
+        Math.round(
+            scale * 100
+        ) + "%";
 
 
-    updateSVGDetail();
+    updateBurgVisibility();
 }
 
 
 // ============================================================
-// SVG DETAIL / BURG SYSTEM
+// UPDATE BURGS
 // ============================================================
 
-function updateSVGDetail() {
+function updateBurgVisibility() {
 
-    try {
-
-        const svgDocument =
-            map.contentDocument;
+    const svg =
+        map.querySelector("svg");
 
 
-        if (!svgDocument) {
+    if (!svg) {
+        return;
+    }
+
+
+    /*
+        Process each settlement category.
+    */
+
+    Object.keys(
+        BURG_LEVELS
+    ).forEach(function(type) {
+
+        const group =
+            svg.querySelector(
+                "#" + type
+            );
+
+
+        if (!group) {
             return;
         }
 
 
-        // ----------------------------------------------------
-        // FIND THE ICON SYSTEM
-        // ----------------------------------------------------
-
-        const icons =
-            svgDocument.getElementById("icons");
+        const showAt =
+            BURG_LEVELS[type];
 
 
-        const burgIcons =
-            svgDocument.getElementById("burgIcons");
+        const targetSize =
+            BURG_SIZES[type];
 
 
-        if (!burgIcons) {
+        /*
+            Determine whether this category should be visible.
+        */
+
+        const visible =
+            scale >= showAt;
+
+
+        group.style.display =
+            visible
+                ? ""
+                : "none";
+
+
+        if (!visible) {
             return;
         }
 
 
-        // Make sure the general icon layer itself is visible.
+        /*
+            Get every actual burg icon.
+        */
 
-        if (icons) {
-
-            icons.style.opacity = "1";
-        }
-
-
-        // ----------------------------------------------------
-        // FIND EACH BURG TYPE
-        // ----------------------------------------------------
-
-        const village =
-            svgDocument.getElementById("village");
+        const uses =
+            group.querySelectorAll(
+                "use"
+            );
 
 
-        const fort =
-            svgDocument.getElementById("fort");
+        uses.forEach(function(use) {
+
+            const original =
+                use.dataset.originalTransform;
 
 
-        const town =
-            svgDocument.getElementById("town");
-
-
-        const city =
-            svgDocument.getElementById("city");
-
-
-        const capital =
-            svgDocument.getElementById("capital");
-
-
-        const groups = [
-
-            {
-                element: village,
-                settings: BURG_SETTINGS.village
-            },
-
-            {
-                element: fort,
-                settings: BURG_SETTINGS.fort
-            },
-
-            {
-                element: town,
-                settings: BURG_SETTINGS.town
-            },
-
-            {
-                element: city,
-                settings: BURG_SETTINGS.city
-            },
-
-            {
-                element: capital,
-                settings: BURG_SETTINGS.capital
-            }
-
-        ];
-
-
-        // ----------------------------------------------------
-        // PROCESS EACH BURG TYPE
-        // ----------------------------------------------------
-
-        groups.forEach(function(group) {
-
-            if (!group.element) {
+            if (!original) {
                 return;
             }
 
 
-            const settings =
-                group.settings;
+            /*
+                Extract the original translation.
 
+                Example:
 
-            // -----------------------------------------------
-            // VISIBILITY
-            // -----------------------------------------------
+                translate(710.61,947.46) scale(0.2)
+            */
 
-            if (scale >= settings.showAt) {
-
-                group.element.style.display =
-                    "";
-
-                group.element.style.opacity =
-                    "1";
-
-            }
-
-            else {
-
-                group.element.style.display =
-                    "none";
-            }
-
-
-            // -----------------------------------------------
-            // RESIZE ICONS
-            // -----------------------------------------------
-
-            //
-            // The actual Azgaar icons are stored as:
-            //
-            // translate(X,Y) scale(0.07)
-            //
-            // or:
-            //
-            // translate(X,Y) scale(0.10)
-            //
-            // etc.
-            //
-            // We replace ONLY the scale portion.
-            //
-            // The translate coordinates are preserved exactly.
-            //
-            // This means the burg remains at its original
-            // geographical position.
-            //
-
-
-            const uses =
-                group.element.querySelectorAll("use");
-
-
-            uses.forEach(function(use) {
-
-                const originalTransform =
-                    use.getAttribute(
-                        "transform"
-                    );
-
-
-                if (!originalTransform) {
-                    return;
-                }
-
-
-                // -------------------------------------------
-                // GET ORIGINAL TRANSLATION
-                // -------------------------------------------
-
-                const translationMatch =
-                    originalTransform.match(
-                        /translate\s*\(\s*([^)]+)\s*\)/
-                    );
-
-
-                if (!translationMatch) {
-                    return;
-                }
-
-
-                const translation =
-                    translationMatch[1];
-
-
-                // -------------------------------------------
-                // CALCULATE NEW INTERNAL SCALE
-                // -------------------------------------------
-                //
-                // A circle/square icon in the SVG is roughly
-                // 10 SVG units wide before its tiny Azgaar
-                // scale is applied.
-                //
-                // We calculate the internal scale required
-                // to produce the desired number of pixels
-                // on the user's screen.
-                //
-                // Because the whole SVG is already being
-                // scaled by "scale", we compensate for that.
-                //
-
-
-                const targetPixels =
-                    settings.size;
-
-
-                const newInternalScale =
-                    targetPixels /
-                    (10 * scale);
-
-
-                // -------------------------------------------
-                // APPLY NEW TRANSFORM
-                // -------------------------------------------
-
-                use.setAttribute(
-                    "transform",
-                    `translate(${translation}) scale(${newInternalScale})`
+            const translationMatch =
+                original.match(
+                    /translate\s*\(\s*([^)]+)\s*\)/
                 );
 
-            });
+
+            if (!translationMatch) {
+                return;
+            }
+
+
+            const translation =
+                translationMatch[1];
+
+
+            /*
+                The SVG icon definitions are approximately
+                10 SVG units across.
+
+                Calculate the internal SVG scale required
+                to make the icon approximately the desired
+                number of screen pixels.
+            */
+
+            const internalScale =
+                targetSize /
+                (
+                    10 *
+                    scale
+                );
+
+
+            use.setAttribute(
+                "transform",
+                `translate(${translation}) scale(${internalScale})`
+            );
 
         });
 
-    }
+    });
 
-    catch (error) {
 
-        console.log(
-            "SVG detail update error:",
-            error
+    /*
+        -------------------------------------------------------
+        BURG LABELS
+        -------------------------------------------------------
+
+        The names are stored in separate label groups.
+
+        We reveal them progressively as the user zooms.
+    */
+
+
+    const labelGroups =
+        svg.querySelectorAll(
+            '[id^="labels-"]'
         );
 
-    }
+
+    labelGroups.forEach(function(group) {
+
+        /*
+            Capital labels appear first.
+        */
+
+        if (
+            group.id ===
+            "labels-capital"
+        ) {
+
+            group.style.display =
+                scale >= 1.8
+                    ? ""
+                    : "none";
+
+        }
+
+
+        /*
+            Other settlement labels appear deeper in.
+        */
+
+        else {
+
+            group.style.display =
+                scale >= 2.5
+                    ? ""
+                    : "none";
+        }
+
+    });
 
 }
 
 
 // ============================================================
-// ZOOM AROUND A SPECIFIC SCREEN POINT
+// ZOOM AT POINT
 // ============================================================
 
 function zoomAt(
@@ -633,31 +915,34 @@ function zoomAt(
         );
 
 
-    // Convert screen coordinates into map coordinates.
-
     const mapX =
-        (screenX - posX) / scale;
+        (
+            screenX -
+            posX
+        ) / scale;
+
 
     const mapY =
-        (screenY - posY) / scale;
+        (
+            screenY -
+            posY
+        ) / scale;
 
-
-    // Change zoom.
 
     scale =
         newScale;
 
 
-    // Keep the point under the cursor.
-
     posX =
         screenX -
-        mapX * scale;
+        mapX *
+        scale;
 
 
     posY =
         screenY -
-        mapY * scale;
+        mapY *
+        scale;
 
 
     updateMap();
@@ -665,7 +950,7 @@ function zoomAt(
 
 
 // ============================================================
-// MOUSE WHEEL ZOOM
+// MOUSE WHEEL
 // ============================================================
 
 container.addEventListener(
@@ -689,7 +974,7 @@ container.addEventListener(
             rect.top;
 
 
-        const zoomFactor =
+        const factor =
             event.deltaY < 0
                 ? 1.25
                 : 0.8;
@@ -698,7 +983,7 @@ container.addEventListener(
         zoomAt(
             mouseX,
             mouseY,
-            scale * zoomFactor
+            scale * factor
         );
 
     },
@@ -709,14 +994,16 @@ container.addEventListener(
 
 
 // ============================================================
-// MOUSE DRAGGING
+// MOUSE DRAG
 // ============================================================
 
 container.addEventListener(
     "mousedown",
     function(event) {
 
-        if (event.button !== 0) {
+        if (
+            event.button !== 0
+        ) {
             return;
         }
 
@@ -732,12 +1019,14 @@ container.addEventListener(
         dragStartX =
             event.clientX;
 
+
         dragStartY =
             event.clientY;
 
 
         startPosX =
             posX;
+
 
         startPosY =
             posY;
@@ -793,7 +1082,7 @@ window.addEventListener(
 
 
 // ============================================================
-// TOUCH SUPPORT
+// TOUCH
 // ============================================================
 
 let touchStartX = 0;
@@ -806,10 +1095,6 @@ let touchStartPosY = 0;
 
 let lastTouchDistance = null;
 
-
-// ------------------------------------------------------------
-// TOUCH START
-// ------------------------------------------------------------
 
 container.addEventListener(
     "touchstart",
@@ -826,12 +1111,14 @@ container.addEventListener(
             touchStartX =
                 touch.clientX;
 
+
             touchStartY =
                 touch.clientY;
 
 
             touchStartPosX =
                 posX;
+
 
             touchStartPosY =
                 posY;
@@ -850,6 +1137,7 @@ container.addEventListener(
                 getTouchDistance(
                     event.touches
                 );
+
         }
 
     },
@@ -859,9 +1147,9 @@ container.addEventListener(
 );
 
 
-// ------------------------------------------------------------
+// ============================================================
 // TOUCH MOVE
-// ------------------------------------------------------------
+// ============================================================
 
 container.addEventListener(
     "touchmove",
@@ -869,10 +1157,6 @@ container.addEventListener(
 
         event.preventDefault();
 
-
-        // ----------------------------------------------------
-        // ONE FINGER PAN
-        // ----------------------------------------------------
 
         if (
             event.touches.length === 1
@@ -902,10 +1186,6 @@ container.addEventListener(
 
         }
 
-
-        // ----------------------------------------------------
-        // TWO FINGER ZOOM
-        // ----------------------------------------------------
 
         else if (
             event.touches.length === 2
@@ -957,6 +1237,7 @@ container.addEventListener(
 
             lastTouchDistance =
                 distance;
+
         }
 
     },
@@ -966,9 +1247,9 @@ container.addEventListener(
 );
 
 
-// ------------------------------------------------------------
+// ============================================================
 // TOUCH END
-// ------------------------------------------------------------
+// ============================================================
 
 container.addEventListener(
     "touchend",
@@ -977,16 +1258,13 @@ container.addEventListener(
         lastTouchDistance =
             null;
 
-    },
-    {
-        passive: false
     }
 );
 
 
-// ------------------------------------------------------------
+// ============================================================
 // TOUCH DISTANCE
-// ------------------------------------------------------------
+// ============================================================
 
 function getTouchDistance(
     touches
@@ -1010,7 +1288,7 @@ function getTouchDistance(
 
 
 // ============================================================
-// ZOOM IN BUTTON
+// BUTTONS
 // ============================================================
 
 document.getElementById(
@@ -1019,19 +1297,17 @@ document.getElementById(
     "click",
     function() {
 
-        const centerX =
-            container.clientWidth /
-            2;
+        const x =
+            container.clientWidth / 2;
 
 
-        const centerY =
-            container.clientHeight /
-            2;
+        const y =
+            container.clientHeight / 2;
 
 
         zoomAt(
-            centerX,
-            centerY,
+            x,
+            y,
             scale * 1.4
         );
 
@@ -1039,29 +1315,23 @@ document.getElementById(
 );
 
 
-// ============================================================
-// ZOOM OUT BUTTON
-// ============================================================
-
 document.getElementById(
     "zoom-out"
 ).addEventListener(
     "click",
     function() {
 
-        const centerX =
-            container.clientWidth /
-            2;
+        const x =
+            container.clientWidth / 2;
 
 
-        const centerY =
-            container.clientHeight /
-            2;
+        const y =
+            container.clientHeight / 2;
 
 
         zoomAt(
-            centerX,
-            centerY,
+            x,
+            y,
             scale * 0.7
         );
 
@@ -1070,7 +1340,7 @@ document.getElementById(
 
 
 // ============================================================
-// RESET / HOME
+// RESET
 // ============================================================
 
 document.getElementById(
@@ -1086,9 +1356,7 @@ document.getElementById(
             MIN_ZOOM;
 
 
-        posX = 0;
-
-        posY = 0;
+        centerMap();
 
 
         updateMap();
@@ -1098,7 +1366,7 @@ document.getElementById(
 
 
 // ============================================================
-// WINDOW RESIZE
+// RESIZE
 // ============================================================
 
 window.addEventListener(
@@ -1114,6 +1382,7 @@ window.addEventListener(
 
             scale =
                 MIN_ZOOM;
+
         }
 
 
@@ -1124,63 +1393,10 @@ window.addEventListener(
 
 
 // ============================================================
-// SVG LOAD
+// START
 // ============================================================
 
-map.addEventListener(
-    "load",
-    function() {
-
-        calculateMinZoom();
-
-
-        // Start with the whole world visible.
-
-        scale =
-            MIN_ZOOM;
-
-
-        const containerWidth =
-            container.clientWidth;
-
-
-        const containerHeight =
-            container.clientHeight;
-
-
-        const scaledWidth =
-            MAP_WIDTH * scale;
-
-
-        const scaledHeight =
-            MAP_HEIGHT * scale;
-
-
-        posX =
-            (
-                containerWidth -
-                scaledWidth
-            ) / 2;
-
-
-        posY =
-            (
-                containerHeight -
-                scaledHeight
-            ) / 2;
-
-
-        updateMap();
-
-    }
-);
-
-
-// ============================================================
-// INITIAL SETUP
-// ============================================================
-
-calculateMinZoom();
+loadMap();
 
 
 </script>
