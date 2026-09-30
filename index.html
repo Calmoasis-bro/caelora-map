@@ -2,7 +2,6 @@
 <html lang="en">
 
 <head>
-
 <meta charset="UTF-8">
 
 <meta
@@ -12,50 +11,33 @@
 
 <title>Caelora — Interactive Map</title>
 
-
 <style>
 
 html,
 body {
-
     margin: 0;
-
     width: 100%;
     height: 100%;
-
     overflow: hidden;
-
     background: #111;
-
     font-family: Arial, sans-serif;
 }
 
-
 #map-container {
-
     position: relative;
-
     width: 100%;
     height: 100%;
-
     overflow: hidden;
-
     cursor: grab;
-
     background: #111;
 }
 
-
 #map-container.dragging {
-
     cursor: grabbing;
 }
 
-
 #map {
-
     position: absolute;
-
     left: 0;
     top: 0;
 
@@ -65,41 +47,31 @@ body {
     transform-origin: 0 0;
 
     user-select: none;
-
     pointer-events: none;
 
     border: 0;
 }
 
-
 #controls {
-
     position: absolute;
-
     top: 15px;
     left: 15px;
 
     z-index: 20;
 
     display: flex;
-
     flex-direction: column;
-
     gap: 6px;
 }
 
-
 #controls button {
-
     width: 42px;
     height: 42px;
 
     border: 1px solid rgba(255,255,255,0.25);
-
     border-radius: 6px;
 
     background: rgba(20,20,20,0.8);
-
     color: white;
 
     font-size: 22px;
@@ -109,15 +81,11 @@ body {
     backdrop-filter: blur(4px);
 }
 
-
 #controls button:hover {
-
     background: rgba(60,60,60,0.9);
 }
 
-
 #zoom-level {
-
     position: absolute;
 
     bottom: 15px;
@@ -139,22 +107,18 @@ body {
 }
 
 </style>
-
 </head>
 
 
 <body>
 
-
 <div id="map-container">
-
 
     <object
         id="map"
         data="caelora.svg"
         type="image/svg+xml">
     </object>
-
 
     <div id="controls">
 
@@ -166,16 +130,16 @@ body {
 
     </div>
 
-
     <div id="zoom-level">100%</div>
-
 
 </div>
 
 
-
 <script>
 
+/* ==========================================================
+   MAP SETTINGS
+========================================================== */
 
 const container =
     document.getElementById("map-container");
@@ -187,20 +151,10 @@ const zoomText =
     document.getElementById("zoom-level");
 
 
-
-/* ----------------------------------------------------------
-   MAP SIZE
----------------------------------------------------------- */
-
 const MAP_WIDTH = 1920;
 
 const MAP_HEIGHT = 1080;
 
-
-
-/* ----------------------------------------------------------
-   ZOOM
----------------------------------------------------------- */
 
 const MAX_ZOOM = 8;
 
@@ -209,20 +163,18 @@ let MIN_ZOOM = 0.15;
 let scale = 1;
 
 
-
-/* ----------------------------------------------------------
+/* ==========================================================
    MAP POSITION
----------------------------------------------------------- */
+========================================================== */
 
 let posX = 0;
 
 let posY = 0;
 
 
-
-/* ----------------------------------------------------------
+/* ==========================================================
    DRAGGING
----------------------------------------------------------- */
+========================================================== */
 
 let dragging = false;
 
@@ -235,10 +187,9 @@ let startPosX = 0;
 let startPosY = 0;
 
 
-
-/* ----------------------------------------------------------
+/* ==========================================================
    TOUCH
----------------------------------------------------------- */
+========================================================== */
 
 let touchStartX = 0;
 
@@ -251,47 +202,188 @@ let touchStartPosY = 0;
 let lastTouchDistance = null;
 
 
+/* ==========================================================
+   FIND SVG ELEMENT
+========================================================== */
 
-/* ----------------------------------------------------------
+function findSVGElement(svg, id) {
+
+    return (
+        svg.getElementById(id) ||
+        svg.querySelector("#" + id)
+    );
+
+}
+
+
+/* ==========================================================
+   UPDATE AZGAAR DETAIL
+========================================================== */
+
+function updateSVGDetail() {
+
+    try {
+
+        const svg =
+            map.contentDocument;
+
+        if (!svg) {
+            return;
+        }
+
+
+        /*
+         * ----------------------------------------------------
+         * IMPORTANT:
+         *
+         * The main "icons" layer is NEVER hidden.
+         *
+         * These are the existing state / major settlement
+         * symbols and should remain visible at every zoom.
+         * ----------------------------------------------------
+         */
+
+        const mainIcons =
+            findSVGElement(
+                svg,
+                "icons"
+            );
+
+        if (mainIcons) {
+
+            mainIcons.style.display = "";
+
+            mainIcons.style.visibility = "visible";
+
+            mainIcons.style.opacity = "1";
+        }
+
+
+        /*
+         * ----------------------------------------------------
+         * BURG ICONS
+         *
+         * These are the smaller settlement symbols.
+         *
+         * They are deliberately hidden when zoomed out and
+         * revealed when the player zooms into the map.
+         * ----------------------------------------------------
+         */
+
+        const burgIcons =
+            findSVGElement(
+                svg,
+                "burgIcons"
+            );
+
+
+        if (burgIcons) {
+
+            /*
+             * World / regional view
+             */
+
+            if (scale < 1.8) {
+
+                burgIcons.style.display = "none";
+
+                burgIcons.style.visibility = "hidden";
+
+                burgIcons.style.opacity = "0";
+
+            }
+
+
+            /*
+             * Medium zoom
+             */
+
+            else if (scale < 2.8) {
+
+                burgIcons.style.display = "";
+
+                burgIcons.style.visibility = "visible";
+
+                burgIcons.style.opacity = "1";
+
+            }
+
+
+            /*
+             * Close zoom
+             */
+
+            else {
+
+                burgIcons.style.display = "";
+
+                burgIcons.style.visibility = "visible";
+
+                burgIcons.style.opacity = "1";
+
+            }
+
+        }
+
+    }
+
+    catch (error) {
+
+        /*
+         * SVG may not have finished loading yet.
+         */
+
+    }
+
+}
+
+
+/* ==========================================================
    CALCULATE MINIMUM ZOOM
----------------------------------------------------------- */
+========================================================== */
 
 function calculateMinZoom() {
 
-    const containerWidth =
+    const width =
         container.clientWidth;
 
-    const containerHeight =
+    const height =
         container.clientHeight;
 
 
     const scaleX =
-        containerWidth / MAP_WIDTH;
+        width / MAP_WIDTH;
 
     const scaleY =
-        containerHeight / MAP_HEIGHT;
+        height / MAP_HEIGHT;
 
 
     MIN_ZOOM =
-        Math.max(scaleX, scaleY);
+        Math.max(
+            scaleX,
+            scaleY
+        );
 
 
     MIN_ZOOM =
-        Math.max(MIN_ZOOM, 0.15);
+        Math.max(
+            MIN_ZOOM,
+            0.15
+        );
+
 }
 
 
-
-/* ----------------------------------------------------------
+/* ==========================================================
    KEEP MAP INSIDE VIEW
----------------------------------------------------------- */
+========================================================== */
 
 function constrainPosition() {
 
-    const containerWidth =
+    const width =
         container.clientWidth;
 
-    const containerHeight =
+    const height =
         container.clientHeight;
 
 
@@ -302,342 +394,53 @@ function constrainPosition() {
         MAP_HEIGHT * scale;
 
 
-    if (scaledWidth <= containerWidth) {
+    if (scaledWidth <= width) {
 
         posX =
-            (containerWidth - scaledWidth) / 2;
+            (width - scaledWidth) / 2;
 
-    } else {
+    }
+
+    else {
 
         const minX =
-            containerWidth - scaledWidth;
+            width - scaledWidth;
 
         posX =
             Math.max(
                 minX,
                 Math.min(posX, 0)
             );
+
     }
 
 
-    if (scaledHeight <= containerHeight) {
+    if (scaledHeight <= height) {
 
         posY =
-            (containerHeight - scaledHeight) / 2;
+            (height - scaledHeight) / 2;
 
-    } else {
+    }
+
+    else {
 
         const minY =
-            containerHeight - scaledHeight;
+            height - scaledHeight;
 
         posY =
             Math.max(
                 minY,
                 Math.min(posY, 0)
             );
+
     }
+
 }
 
 
-
-/* ----------------------------------------------------------
-   FIND SVG LAYER
----------------------------------------------------------- */
-
-function findLayer(svgDocument, names) {
-
-    for (const name of names) {
-
-        const element =
-            svgDocument.getElementById(name);
-
-        if (element) {
-
-            return element;
-        }
-    }
-
-
-    return null;
-}
-
-
-
-/* ----------------------------------------------------------
-   CONTROL AZGAAR DETAIL
----------------------------------------------------------- */
-
-function updateSVGDetail() {
-
-    try {
-
-        const svgDocument =
-            map.contentDocument;
-
-
-        if (!svgDocument) {
-
-            return;
-        }
-
-
-
-        /*
-         * IMPORTANT
-         *
-         * The white circles and anchor symbols are
-         * Azgaar's burgIcons layer.
-         *
-         * We deliberately hide that layer.
-         */
-
-        const burgIcons =
-            findLayer(
-                svgDocument,
-                [
-                    "burgIcons",
-                    "burg-icons"
-                ]
-            );
-
-
-        if (burgIcons) {
-
-            burgIcons.style.display = "none";
-
-            burgIcons.style.opacity = "0";
-        }
-
-
-
-        /*
-         * Some Azgaar exports use one general
-         * emblem layer.
-         */
-
-        const emblems =
-            findLayer(
-                svgDocument,
-                [
-                    "emblems",
-                    "Emblems"
-                ]
-            );
-
-
-
-        /*
-         * Some exports can separate burg,
-         * province and state emblems.
-         */
-
-        const burgEmblems =
-            findLayer(
-                svgDocument,
-                [
-                    "burgEmblems",
-                    "burg-emblems",
-                    "burgsEmblems"
-                ]
-            );
-
-
-        const townEmblems =
-            findLayer(
-                svgDocument,
-                [
-                    "townEmblems",
-                    "town-emblems"
-                ]
-            );
-
-
-        const villageEmblems =
-            findLayer(
-                svgDocument,
-                [
-                    "villageEmblems",
-                    "village-emblems"
-                ]
-            );
-
-
-
-        /*
-         * State and province heraldry should remain
-         * hidden until the map is sufficiently zoomed.
-         */
-
-        const stateEmblems =
-            findLayer(
-                svgDocument,
-                [
-                    "stateEmblems",
-                    "state-emblems"
-                ]
-            );
-
-
-        const provinceEmblems =
-            findLayer(
-                svgDocument,
-                [
-                    "provinceEmblems",
-                    "province-emblems"
-                ]
-            );
-
-
-
-        /*
-         * --------------------------------------------------
-         * GENERAL EMBLEM LAYER
-         * --------------------------------------------------
-         *
-         * If Azgaar exported all heraldry into one
-         * "emblems" layer, this is the layer we reveal.
-         */
-
-        if (emblems) {
-
-            if (scale >= 2.2) {
-
-                emblems.style.display = "";
-
-                emblems.style.opacity = "1";
-
-            } else {
-
-                emblems.style.opacity = "0";
-            }
-        }
-
-
-
-        /*
-         * --------------------------------------------------
-         * BURG EMBLEMS
-         * --------------------------------------------------
-         */
-
-        if (burgEmblems) {
-
-            if (scale >= 2.2) {
-
-                burgEmblems.style.display = "";
-
-                burgEmblems.style.opacity = "1";
-
-            } else {
-
-                burgEmblems.style.opacity = "0";
-            }
-        }
-
-
-
-        /*
-         * --------------------------------------------------
-         * TOWN EMBLEMS
-         * --------------------------------------------------
-         */
-
-        if (townEmblems) {
-
-            if (scale >= 2.0) {
-
-                townEmblems.style.display = "";
-
-                townEmblems.style.opacity = "1";
-
-            } else {
-
-                townEmblems.style.opacity = "0";
-            }
-        }
-
-
-
-        /*
-         * --------------------------------------------------
-         * VILLAGE EMBLEMS
-         * --------------------------------------------------
-         */
-
-        if (villageEmblems) {
-
-            if (scale >= 1.8) {
-
-                villageEmblems.style.display = "";
-
-                villageEmblems.style.opacity = "1";
-
-            } else {
-
-                villageEmblems.style.opacity = "0";
-            }
-        }
-
-
-
-        /*
-         * --------------------------------------------------
-         * STATE EMBLEMS
-         * --------------------------------------------------
-         */
-
-        if (stateEmblems) {
-
-            if (scale >= 1.5) {
-
-                stateEmblems.style.display = "";
-
-                stateEmblems.style.opacity = "1";
-
-            } else {
-
-                stateEmblems.style.opacity = "0";
-            }
-        }
-
-
-
-        /*
-         * --------------------------------------------------
-         * PROVINCE EMBLEMS
-         * --------------------------------------------------
-         */
-
-        if (provinceEmblems) {
-
-            if (scale >= 1.7) {
-
-                provinceEmblems.style.display = "";
-
-                provinceEmblems.style.opacity = "1";
-
-            } else {
-
-                provinceEmblems.style.opacity = "0";
-            }
-        }
-
-
-    } catch (error) {
-
-        /*
-         * SVG may still be loading.
-         * Try again on the next update.
-         */
-
-    }
-}
-
-
-
-/* ----------------------------------------------------------
+/* ==========================================================
    UPDATE MAP
----------------------------------------------------------- */
+========================================================== */
 
 function updateMap() {
 
@@ -653,13 +456,13 @@ function updateMap() {
 
 
     updateSVGDetail();
+
 }
 
 
-
-/* ----------------------------------------------------------
-   ZOOM AROUND POINT
----------------------------------------------------------- */
+/* ==========================================================
+   ZOOM AT POINT
+========================================================== */
 
 function zoomAt(
     screenX,
@@ -670,13 +473,15 @@ function zoomAt(
     newScale =
         Math.max(
             MIN_ZOOM,
-            Math.min(MAX_ZOOM, newScale)
+            Math.min(
+                MAX_ZOOM,
+                newScale
+            )
         );
 
 
     const mapX =
         (screenX - posX) / scale;
-
 
     const mapY =
         (screenY - posY) / scale;
@@ -687,21 +492,23 @@ function zoomAt(
 
 
     posX =
-        screenX - mapX * scale;
+        screenX -
+        mapX * scale;
 
 
     posY =
-        screenY - mapY * scale;
+        screenY -
+        mapY * scale;
 
 
     updateMap();
+
 }
 
 
-
-/* ----------------------------------------------------------
-   MOUSE WHEEL ZOOM
----------------------------------------------------------- */
+/* ==========================================================
+   MOUSE WHEEL
+========================================================== */
 
 container.addEventListener(
     "wheel",
@@ -715,11 +522,13 @@ container.addEventListener(
 
 
         const mouseX =
-            event.clientX - rect.left;
+            event.clientX -
+            rect.left;
 
 
         const mouseY =
-            event.clientY - rect.top;
+            event.clientY -
+            rect.top;
 
 
         const zoomFactor =
@@ -735,21 +544,21 @@ container.addEventListener(
         );
 
     },
-    { passive: false }
+    {
+        passive: false
+    }
 );
 
 
-
-/* ----------------------------------------------------------
-   MOUSE DRAGGING
----------------------------------------------------------- */
+/* ==========================================================
+   MOUSE DOWN
+========================================================== */
 
 container.addEventListener(
     "mousedown",
     function(event) {
 
         if (event.button !== 0) {
-
             return;
         }
 
@@ -779,25 +588,33 @@ container.addEventListener(
 );
 
 
+/* ==========================================================
+   MOUSE MOVE
+========================================================== */
 
 window.addEventListener(
     "mousemove",
     function(event) {
 
         if (!dragging) {
-
             return;
         }
 
 
         posX =
             startPosX +
-            (event.clientX - dragStartX);
+            (
+                event.clientX -
+                dragStartX
+            );
 
 
         posY =
             startPosY +
-            (event.clientY - dragStartY);
+            (
+                event.clientY -
+                dragStartY
+            );
 
 
         updateMap();
@@ -806,13 +623,15 @@ window.addEventListener(
 );
 
 
+/* ==========================================================
+   MOUSE UP
+========================================================== */
 
 window.addEventListener(
     "mouseup",
     function() {
 
         dragging = false;
-
 
         container.classList.remove(
             "dragging"
@@ -822,10 +641,9 @@ window.addEventListener(
 );
 
 
-
-/* ----------------------------------------------------------
+/* ==========================================================
    TOUCH START
----------------------------------------------------------- */
+========================================================== */
 
 container.addEventListener(
     "touchstart",
@@ -866,17 +684,19 @@ container.addEventListener(
                 getTouchDistance(
                     event.touches
                 );
+
         }
 
     },
-    { passive: false }
+    {
+        passive: false
+    }
 );
 
 
-
-/* ----------------------------------------------------------
+/* ==========================================================
    TOUCH MOVE
----------------------------------------------------------- */
+========================================================== */
 
 container.addEventListener(
     "touchmove",
@@ -885,9 +705,8 @@ container.addEventListener(
         event.preventDefault();
 
 
-
         /*
-         * ONE FINGER = PAN
+         * PAN
          */
 
         if (
@@ -919,9 +738,8 @@ container.addEventListener(
         }
 
 
-
         /*
-         * TWO FINGERS = ZOOM
+         * PINCH ZOOM
          */
 
         else if (
@@ -968,22 +786,25 @@ container.addEventListener(
                     centerY,
                     scale * factor
                 );
+
             }
 
 
             lastTouchDistance =
                 distance;
+
         }
 
     },
-    { passive: false }
+    {
+        passive: false
+    }
 );
 
 
-
-/* ----------------------------------------------------------
+/* ==========================================================
    TOUCH END
----------------------------------------------------------- */
+========================================================== */
 
 container.addEventListener(
     "touchend",
@@ -992,15 +813,13 @@ container.addEventListener(
         lastTouchDistance =
             null;
 
-    },
-    { passive: false }
+    }
 );
 
 
-
-/* ----------------------------------------------------------
+/* ==========================================================
    TOUCH DISTANCE
----------------------------------------------------------- */
+========================================================== */
 
 function getTouchDistance(
     touches
@@ -1020,13 +839,13 @@ function getTouchDistance(
         dx * dx +
         dy * dy
     );
+
 }
 
 
-
-/* ----------------------------------------------------------
+/* ==========================================================
    ZOOM IN BUTTON
----------------------------------------------------------- */
+========================================================== */
 
 document
     .getElementById("zoom-in")
@@ -1052,10 +871,9 @@ document
     );
 
 
-
-/* ----------------------------------------------------------
+/* ==========================================================
    ZOOM OUT BUTTON
----------------------------------------------------------- */
+========================================================== */
 
 document
     .getElementById("zoom-out")
@@ -1081,10 +899,9 @@ document
     );
 
 
-
-/* ----------------------------------------------------------
+/* ==========================================================
    RESET
----------------------------------------------------------- */
+========================================================== */
 
 document
     .getElementById("reset")
@@ -1110,10 +927,9 @@ document
     );
 
 
-
-/* ----------------------------------------------------------
-   WINDOW RESIZE
----------------------------------------------------------- */
+/* ==========================================================
+   RESIZE
+========================================================== */
 
 window.addEventListener(
     "resize",
@@ -1128,6 +944,7 @@ window.addEventListener(
 
             scale =
                 MIN_ZOOM;
+
         }
 
 
@@ -1137,10 +954,9 @@ window.addEventListener(
 );
 
 
-
-/* ----------------------------------------------------------
+/* ==========================================================
    SVG LOADED
----------------------------------------------------------- */
+========================================================== */
 
 map.addEventListener(
     "load",
@@ -1153,11 +969,11 @@ map.addEventListener(
             MIN_ZOOM;
 
 
-        const containerWidth =
+        const width =
             container.clientWidth;
 
 
-        const containerHeight =
+        const height =
             container.clientHeight;
 
 
@@ -1171,14 +987,14 @@ map.addEventListener(
 
         posX =
             (
-                containerWidth -
+                width -
                 scaledWidth
             ) / 2;
 
 
         posY =
             (
-                containerHeight -
+                height -
                 scaledHeight
             ) / 2;
 
@@ -1189,16 +1005,13 @@ map.addEventListener(
 );
 
 
-
-/* ----------------------------------------------------------
-   INITIAL SETUP
----------------------------------------------------------- */
+/* ==========================================================
+   INITIALISE
+========================================================== */
 
 calculateMinZoom();
 
 </script>
 
-
 </body>
-
 </html>
