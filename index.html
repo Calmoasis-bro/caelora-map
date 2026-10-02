@@ -2,501 +2,742 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+>
+
 <title>Caelora — Interactive Map</title>
 
 <style>
-  * {
-    box-sizing: border-box;
-  }
 
-  html, body {
-    width: 100%;
-    height: 100%;
-    margin: 0;
-    overflow: hidden;
-    background: #111;
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  }
+* {
+  box-sizing: border-box;
+}
 
-  #viewport {
-    position: fixed;
-    inset: 0;
-    overflow: hidden;
-    cursor: grab;
-    touch-action: none;
-    background: #111;
-  }
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #111;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
 
-  #viewport.dragging {
-    cursor: grabbing;
-  }
 
-  #mapObject {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 1920px;
-    height: 1080px;
-    transform-origin: 0 0;
-    user-select: none;
-    -webkit-user-drag: none;
-  }
+/* =========================================================
+   MAP VIEWPORT
+   ========================================================= */
 
-  #controls {
-    position: fixed;
-    z-index: 20;
-    top: 14px;
-    right: 14px;
-    display: flex;
-    gap: 6px;
-    padding: 6px;
-    border-radius: 8px;
-    background: rgba(20,20,20,.78);
-    backdrop-filter: blur(5px);
-  }
+#viewport {
 
-  button {
-    width: 38px;
-    height: 34px;
-    border: 0;
-    border-radius: 5px;
-    background: #eee;
-    color: #111;
-    font-size: 19px;
-    cursor: pointer;
-  }
+  position: fixed;
 
-  button:hover {
-    background: #fff;
-  }
+  inset: 0;
 
-  #status {
-    position: fixed;
-    z-index: 20;
-    left: 14px;
-    bottom: 14px;
-    padding: 5px 8px;
-    border-radius: 5px;
-    color: #eee;
-    background: rgba(20,20,20,.68);
-    font: 12px/1.2 system-ui, sans-serif;
-    pointer-events: none;
-  }
+  overflow: hidden;
+
+  cursor: grab;
+
+  touch-action: none;
+
+  background: #111;
+}
+
+#viewport.dragging {
+  cursor: grabbing;
+}
+
+
+/*
+   IMPORTANT:
+
+   The SVG object no longer receives mouse input directly.
+
+   This means the parent viewport receives:
+
+   - dragging
+   - mouse wheel
+   - touch gestures
+
+   while the SVG remains purely visual.
+*/
+
+#mapObject {
+
+  position: absolute;
+
+  left: 0;
+  top: 0;
+
+  width: 1920px;
+  height: 1080px;
+
+  transform-origin: 0 0;
+
+  user-select: none;
+
+  -webkit-user-drag: none;
+
+  pointer-events: none;
+}
+
+
+/* =========================================================
+   CONTROLS
+   ========================================================= */
+
+#controls {
+
+  position: fixed;
+
+  z-index: 20;
+
+  top: 14px;
+  right: 14px;
+
+  display: flex;
+
+  gap: 6px;
+
+  padding: 6px;
+
+  border-radius: 8px;
+
+  background: rgba(20,20,20,.78);
+
+  backdrop-filter: blur(5px);
+}
+
+button {
+
+  width: 38px;
+  height: 34px;
+
+  border: 0;
+
+  border-radius: 5px;
+
+  background: #eee;
+
+  color: #111;
+
+  font-size: 19px;
+
+  cursor: pointer;
+}
+
+button:hover {
+  background: #fff;
+}
+
+
+/* =========================================================
+   STATUS
+   ========================================================= */
+
+#status {
+
+  position: fixed;
+
+  z-index: 20;
+
+  left: 14px;
+  bottom: 14px;
+
+  padding: 5px 8px;
+
+  border-radius: 5px;
+
+  color: #eee;
+
+  background: rgba(20,20,20,.68);
+
+  font: 12px/1.2 system-ui, sans-serif;
+
+  pointer-events: none;
+}
+
 </style>
 </head>
 
+
 <body>
 
+
 <div id="viewport">
+
   <object
     id="mapObject"
     data="caelora.svg"
     type="image/svg+xml">
   </object>
+
 </div>
+
 
 <div id="controls">
-  <button id="zoomOut" title="Zoom out">−</button>
-  <button id="reset" title="Reset view">⌂</button>
-  <button id="zoomIn" title="Zoom in">+</button>
+
+  <button
+    id="zoomOut"
+    title="Zoom out">
+    −
+  </button>
+
+  <button
+    id="reset"
+    title="Reset view">
+    ⌂
+  </button>
+
+  <button
+    id="zoomIn"
+    title="Zoom in">
+    +
+  </button>
+
 </div>
 
-<div id="status">Loading map…</div>
+
+<div id="status">
+  Loading map…
+</div>
+
 
 <script>
+
 (() => {
-  "use strict";
 
-  const SVG_W = 1920;
-  const SVG_H = 1080;
-
-  const viewport = document.getElementById("viewport");
-  const mapObject = document.getElementById("mapObject");
-  const status = document.getElementById("status");
-
-  let svg = null;
-
-  let scale = 1;
-  let minScale = 1;
-
-  let x = 0;
-  let y = 0;
-
-  let dragging = false;
-  let lastX = 0;
-  let lastY = 0;
-
-  let pinchDistance = null;
-
-  let raf = 0;
-  let lastLayerState = "";
-
-  /*
-    Zoom thresholds.
-
-    The map starts with only the large-scale political
-    information visible.
-
-    As the user zooms in, progressively more settlement
-    information is enabled.
-  */
-
-  const DETAIL = {
-
-    // Province heraldry remains available from minimum zoom.
-    provinceEmblems: 1.00,
-
-    // Major city labels.
-    cityLabels: 1.12,
-
-    // First stage of smaller burg heraldry.
-    burgEmblems1: 1.45,
-
-    // Fort labels.
-    fortLabels: 1.40,
-
-    // Town labels.
-    townLabels: 1.75,
-
-    // Second stage of burg heraldry.
-    burgEmblems2: 1.90,
-
-    // Village labels.
-    villageLabels: 2.35,
-
-    // Third stage of burg heraldry.
-    burgEmblems3: 2.55,
-
-    // All burg heraldry.
-    burgEmblems4: 3.10
-  };
+"use strict";
 
 
-  function clamp(value, minimum, maximum) {
-    return Math.max(
-      minimum,
-      Math.min(maximum, value)
+/* =========================================================
+   BASIC MAP SETTINGS
+   ========================================================= */
+
+const SVG_W = 1920;
+const SVG_H = 1080;
+
+const viewport =
+  document.getElementById("viewport");
+
+const mapObject =
+  document.getElementById("mapObject");
+
+const status =
+  document.getElementById("status");
+
+
+let svg = null;
+
+let scale = 1;
+
+let minScale = 1;
+
+let x = 0;
+let y = 0;
+
+
+let dragging = false;
+
+let lastX = 0;
+let lastY = 0;
+
+let pinchDistance = null;
+
+
+/*
+   requestAnimationFrame is used so rapid mouse-wheel
+   movement does not continuously manipulate the SVG DOM.
+*/
+
+let raf = 0;
+
+let lastDetailState = "";
+
+
+/* =========================================================
+   ZOOM LEVELS
+   =========================================================
+
+   These deliberately create a gradual progression:
+
+   MINIMUM
+      State emblems only
+
+   1.25x
+      Province emblems
+
+   1.45x
+      First burg shields
+
+   1.70x
+      City labels
+
+   1.90x
+      More burg shields + town labels
+
+   2.30x
+      Fort labels
+
+   2.60x
+      Most burg shields + village labels
+
+   3.00x
+      All burg shields
+*/
+
+
+const DETAIL = {
+
+  provinceEmblems: 1.25,
+
+  cityLabels: 1.65,
+
+  burgEmblems1: 1.45,
+
+  townLabels: 1.90,
+
+  fortLabels: 2.20,
+
+  villageLabels: 2.55,
+
+  burgEmblems2: 1.90,
+
+  burgEmblems3: 2.45,
+
+  burgEmblems4: 3.00
+
+};
+
+
+/* =========================================================
+   BURG SHIELD SIZE
+   =========================================================
+
+   The exported Azgaar burg shields are very small.
+
+   Increasing the font size of the burgEmblems group makes
+   the existing 1em heraldic <use> elements larger without
+   replacing them with fake graphics.
+
+   1.7em keeps them small enough to belong on the map while
+   making them considerably more readable.
+*/
+
+const BURG_EMBLEM_SIZE = "1.7em";
+
+
+/* =========================================================
+   UTILITY
+   ========================================================= */
+
+function clamp(
+  value,
+  minimum,
+  maximum
+) {
+
+  return Math.max(
+    minimum,
+    Math.min(
+      maximum,
+      value
+    )
+  );
+}
+
+
+/* =========================================================
+   FIND SVG GROUP
+   ========================================================= */
+
+function getGroup(id) {
+
+  if (!svg) {
+    return null;
+  }
+
+  return svg.getElementById(id);
+}
+
+
+/* =========================================================
+   SHOW / HIDE SVG GROUP
+   ========================================================= */
+
+function setDisplay(
+  id,
+  visible
+) {
+
+  const element =
+    getGroup(id);
+
+  if (!element) {
+    return;
+  }
+
+  element.style.display =
+    visible ? "" : "none";
+}
+
+
+/* =========================================================
+   BURG SHIELD CACHE
+   ========================================================= */
+
+let burgUses = [];
+
+
+function cacheBurgUses() {
+
+  const group =
+    getGroup("burgEmblems");
+
+  if (!group) {
+
+    burgUses = [];
+
+    return;
+  }
+
+
+  burgUses =
+    Array.from(
+      group.querySelectorAll(
+        ":scope > use"
+      )
     );
-  }
+}
 
 
-  function getGroup(id) {
+/* =========================================================
+   MAKE BURG SHIELDS LARGER
+   ========================================================= */
 
-    if (!svg) {
-      return null;
-    }
+function resizeBurgEmblems() {
 
-    return svg.getElementById(id);
-  }
+  const group =
+    getGroup("burgEmblems");
 
-
-  /*
-    Show or hide an entire SVG layer.
-
-    display:none is intentional here.
-
-    This is preferable to opacity:0 or visibility:hidden
-    for the large number of small SVG elements because
-    the browser does not need to paint the hidden layer.
-  */
-
-  function setDisplay(id, visible) {
-
-    const element = getGroup(id);
-
-    if (element) {
-      element.style.display = visible ? "" : "none";
-    }
+  if (!group) {
+    return;
   }
 
 
   /*
-    burgEmblems is one group in the exported Azgaar SVG.
+     The individual shields use:
 
-    Inside it are individual <use> elements which reference
-    the actual generated burg coats of arms.
+       width="1em"
+       height="1em"
 
-    We cache those elements once rather than repeatedly
-    searching the SVG while zooming.
+     so increasing font-size increases the actual
+     rendered heraldry.
   */
 
-  let burgUses = [];
+  group.style.fontSize =
+    BURG_EMBLEM_SIZE;
+}
 
 
-  function cacheBurgUses() {
+/* =========================================================
+   REVEAL A PORTION OF THE BURG SHIELDS
+   ========================================================= */
 
-    const group = getGroup("burgEmblems");
+function showBurgFraction(
+  fraction
+) {
 
-    if (!group) {
-      burgUses = [];
-      return;
-    }
+  if (!burgUses.length) {
+    return;
+  }
 
-    burgUses =
-      Array.from(
-        group.querySelectorAll(":scope > use")
-      );
+
+  const count =
+    Math.ceil(
+      burgUses.length *
+      fraction
+    );
+
+
+  for (
+    let i = 0;
+    i < burgUses.length;
+    i++
+  ) {
+
+    burgUses[i].style.display =
+      i < count
+        ? ""
+        : "none";
+  }
+}
+
+
+/* =========================================================
+   UPDATE DETAIL LEVEL
+   ========================================================= */
+
+function updateDetailLayers() {
+
+  if (!svg) {
+    return;
+  }
+
+
+  const s = scale;
+
+
+  let detailState;
+
+
+  if (
+    s <
+    DETAIL.burgEmblems1
+  ) {
+
+    detailState = "minimum";
+
+  } else if (
+    s <
+    DETAIL.burgEmblems2
+  ) {
+
+    detailState = "low";
+
+  } else if (
+    s <
+    DETAIL.burgEmblems3
+  ) {
+
+    detailState = "medium";
+
+  } else if (
+    s <
+    DETAIL.burgEmblems4
+  ) {
+
+    detailState = "high";
+
+  } else {
+
+    detailState = "maximum";
   }
 
 
   /*
-    Reveal a percentage of the actual burg shields.
+     If we haven't crossed a threshold,
+     don't touch the SVG.
 
-    This does NOT create replacement icons.
-
-    It uses the real heraldry already contained in caelora.svg.
+     This is important for performance.
   */
 
-  function showBurgFraction(fraction) {
+  if (
+    detailState ===
+    lastDetailState
+  ) {
 
-    if (!burgUses.length) {
-      return;
-    }
-
-    const count =
-      Math.ceil(
-        burgUses.length * fraction
-      );
-
-    for (
-      let i = 0;
-      i < burgUses.length;
-      i++
-    ) {
-
-      burgUses[i].style.display =
-        i < count ? "" : "none";
-    }
+    return;
   }
 
 
-  /*
-    Update all detail layers.
-
-    This function is only allowed to perform expensive
-    visibility work when a zoom threshold is crossed.
-  */
-
-  function updateDetailLayers() {
-
-    if (!svg) {
-      return;
-    }
-
-    const currentScale = scale;
-
-    let state;
+  lastDetailState =
+    detailState;
 
 
-    if (
-      currentScale <
-      DETAIL.burgEmblems1
-    ) {
+  /* =======================================================
+     STATE EMBLEMS
 
-      state = "0";
+     ALWAYS VISIBLE.
 
-    } else if (
-      currentScale <
-      DETAIL.burgEmblems2
-    ) {
+     These are the only emblems visible at minimum zoom.
+     ======================================================= */
 
-      state = "1";
+  setDisplay(
+    "stateEmblems",
+    true
+  );
 
-    } else if (
-      currentScale <
-      DETAIL.burgEmblems3
-    ) {
 
-      state = "2";
+  /* =======================================================
+     PROVINCE EMBLEMS
 
-    } else if (
-      currentScale <
-      DETAIL.burgEmblems4
-    ) {
+     Hidden at minimum zoom.
+     ======================================================= */
 
-      state = "3";
+  setDisplay(
+    "provinceEmblems",
+    s >= DETAIL.provinceEmblems
+  );
 
-    } else {
 
-      state = "4";
-    }
+  /* =======================================================
+     BURG ICONS
 
+     ALWAYS HIDDEN.
+
+     This removes:
+
+       white settlement circles
+       white port circles
+       anchor symbols
+     ======================================================= */
+
+  setDisplay(
+    "burgIcons",
+    false
+  );
+
+
+  /* =======================================================
+     LARGE LABELS
+
+     ======================================================= */
+
+  setDisplay(
+    "labels-state",
+    true
+  );
+
+  setDisplay(
+    "labels-province",
+    true
+  );
+
+  setDisplay(
+    "labels-capital",
+    true
+  );
+
+
+  /* =======================================================
+     CITY LABELS
+     ======================================================= */
+
+  setDisplay(
+    "labels-city",
+    s >= DETAIL.cityLabels
+  );
+
+
+  /* =======================================================
+     TOWN LABELS
+     ======================================================= */
+
+  setDisplay(
+    "labels-town",
+    s >= DETAIL.townLabels
+  );
+
+
+  /* =======================================================
+     FORT LABELS
+     ======================================================= */
+
+  setDisplay(
+    "labels-fort",
+    s >= DETAIL.fortLabels
+  );
+
+
+  /* =======================================================
+     VILLAGE LABELS
+     ======================================================= */
+
+  setDisplay(
+    "labels-village",
+    s >= DETAIL.villageLabels
+  );
+
+
+  /* =======================================================
+     BURG HERALDRY
+     ======================================================= */
+
+  if (
+    s <
+    DETAIL.burgEmblems1
+  ) {
 
     /*
-      If we haven't crossed a detail threshold,
-      don't touch the SVG.
-
-      This prevents unnecessary DOM operations during
-      continuous mouse-wheel zooming.
-    */
-
-    if (
-      state === lastLayerState
-    ) {
-      return;
-    }
-
-    lastLayerState = state;
-
-
-    /*
-      LARGE-SCALE POLITICAL HERALDRY
-
-      These remain visible at minimum zoom.
+       No small shields at minimum zoom.
     */
 
     setDisplay(
-      "stateEmblems",
-      true
-    );
-
-    setDisplay(
-      "provinceEmblems",
-      true
-    );
-
-
-    /*
-      Remove Azgaar's normal burg icons.
-
-      This removes the white settlement circles
-      and port anchor symbols.
-
-      The actual heraldic shields are handled separately.
-    */
-
-    setDisplay(
-      "burgIcons",
+      "burgEmblems",
       false
     );
 
+  } else {
 
     /*
-      LARGE-SCALE LABELS
+       Enable the real burg heraldry.
     */
 
     setDisplay(
-      "labels-state",
-      true
-    );
-
-    setDisplay(
-      "labels-province",
-      true
-    );
-
-    setDisplay(
-      "labels-capital",
+      "burgEmblems",
       true
     );
 
 
     /*
-      PROGRESSIVELY SMALLER LABELS
-    */
-
-    setDisplay(
-      "labels-city",
-      currentScale >= DETAIL.cityLabels
-    );
-
-    setDisplay(
-      "labels-fort",
-      currentScale >= DETAIL.fortLabels
-    );
-
-    setDisplay(
-      "labels-town",
-      currentScale >= DETAIL.townLabels
-    );
-
-    setDisplay(
-      "labels-village",
-      currentScale >= DETAIL.villageLabels
-    );
-
-
-    /*
-      PROGRESSIVELY REVEALED BURG SHIELDS
+       Gradually reveal more shields.
     */
 
     if (
-      currentScale <
-      DETAIL.burgEmblems1
+      s <
+      DETAIL.burgEmblems2
     ) {
 
-      /*
-        At minimum zoom, don't render the small
-        settlement shields at all.
-      */
+      showBurgFraction(
+        0.20
+      );
 
-      setDisplay(
-        "burgEmblems",
-        false
+    } else if (
+      s <
+      DETAIL.burgEmblems3
+    ) {
+
+      showBurgFraction(
+        0.50
+      );
+
+    } else if (
+      s <
+      DETAIL.burgEmblems4
+    ) {
+
+      showBurgFraction(
+        0.80
       );
 
     } else {
 
-      /*
-        The burg emblem layer becomes available.
-      */
-
-      setDisplay(
-        "burgEmblems",
-        true
+      showBurgFraction(
+        1.00
       );
-
-
-      /*
-        Reveal progressively more of the actual
-        generated shields as the user zooms in.
-      */
-
-      if (
-        currentScale <
-        DETAIL.burgEmblems2
-      ) {
-
-        showBurgFraction(0.25);
-
-      } else if (
-        currentScale <
-        DETAIL.burgEmblems3
-      ) {
-
-        showBurgFraction(0.50);
-
-      } else if (
-        currentScale <
-        DETAIL.burgEmblems4
-      ) {
-
-        showBurgFraction(0.80);
-
-      } else {
-
-        showBurgFraction(1.00);
-      }
     }
+  }
+}
+
+
+/* =========================================================
+   SCHEDULE DETAIL UPDATE
+   ========================================================= */
+
+function scheduleDetailUpdate() {
+
+  if (raf) {
+    return;
   }
 
 
-  /*
-    Schedule a detail update on the next animation frame.
-
-    This prevents a large number of zoom events from
-    hammering the SVG DOM simultaneously.
-  */
-
-  function scheduleDetailUpdate() {
-
-    if (raf) {
-      return;
-    }
-
-    raf =
-      requestAnimationFrame(() => {
+  raf =
+    requestAnimationFrame(
+      () => {
 
         raf = 0;
 
@@ -504,633 +745,707 @@
 
         status.textContent =
           `Zoom ${scale.toFixed(2)}×`;
-      });
-  }
+      }
+    );
+}
 
 
-  /*
-    Calculate the minimum scale required to fit the
-    complete 1920 × 1080 map inside the browser.
-  */
+/* =========================================================
+   RESIZE
+   ========================================================= */
 
-  function resize() {
+function resize() {
 
-    const viewportWidth =
-      viewport.clientWidth;
+  const viewportWidth =
+    viewport.clientWidth;
 
-    const viewportHeight =
-      viewport.clientHeight;
-
-
-    minScale =
-      Math.min(
-        viewportWidth / SVG_W,
-        viewportHeight / SVG_H
-      );
+  const viewportHeight =
+    viewport.clientHeight;
 
 
-    if (
-      !Number.isFinite(minScale) ||
-      minScale <= 0
-    ) {
-
-      minScale = 0.1;
-    }
+  minScale =
+    Math.min(
+      viewportWidth / SVG_W,
+      viewportHeight / SVG_H
+    );
 
 
-    scale =
-      Math.max(
-        scale,
-        minScale
-      );
-
-
-    constrain();
-
-    render();
-  }
-
-
-  /*
-    Prevent the map from being dragged completely
-    outside the viewport.
-  */
-
-  function constrain() {
-
-    const viewportWidth =
-      viewport.clientWidth;
-
-    const viewportHeight =
-      viewport.clientHeight;
-
-
-    const mapWidth =
-      SVG_W * scale;
-
-    const mapHeight =
-      SVG_H * scale;
-
-
-    if (mapWidth <= viewportWidth) {
-
-      x =
-        (viewportWidth - mapWidth) / 2;
-
-    } else {
-
-      x =
-        clamp(
-          x,
-          viewportWidth - mapWidth,
-          0
-        );
-    }
-
-
-    if (mapHeight <= viewportHeight) {
-
-      y =
-        (viewportHeight - mapHeight) / 2;
-
-    } else {
-
-      y =
-        clamp(
-          y,
-          viewportHeight - mapHeight,
-          0
-        );
-    }
-  }
-
-
-  /*
-    Apply the map transformation.
-  */
-
-  function render() {
-
-    mapObject.style.transform =
-      `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
-
-    scheduleDetailUpdate();
-  }
-
-
-  /*
-    Return to the minimum map scale.
-  */
-
-  function resetView() {
-
-    scale = minScale;
-
-    x =
-      (viewport.clientWidth -
-       SVG_W * scale) / 2;
-
-    y =
-      (viewport.clientHeight -
-       SVG_H * scale) / 2;
-
-    constrain();
-
-    render();
-  }
-
-
-  /*
-    Zoom around the mouse/touch position rather than
-    always zooming around the centre of the screen.
-  */
-
-  function zoomAt(
-    factor,
-    clientX,
-    clientY
+  if (
+    !Number.isFinite(
+      minScale
+    ) ||
+    minScale <= 0
   ) {
 
-    const rect =
-      viewport.getBoundingClientRect();
+    minScale = 0.1;
+  }
 
 
-    const pointerX =
-      clientX - rect.left;
-
-    const pointerY =
-      clientY - rect.top;
-
-
-    /*
-      Determine which map coordinate is currently
-      underneath the pointer.
-    */
-
-    const mapX =
-      (pointerX - x) / scale;
-
-    const mapY =
-      (pointerY - y) / scale;
+  scale =
+    Math.max(
+      scale,
+      minScale
+    );
 
 
-    const newScale =
+  constrain();
+
+  render();
+}
+
+
+/* =========================================================
+   CONSTRAIN MAP
+   ========================================================= */
+
+function constrain() {
+
+  const viewportWidth =
+    viewport.clientWidth;
+
+  const viewportHeight =
+    viewport.clientHeight;
+
+
+  const mapWidth =
+    SVG_W * scale;
+
+  const mapHeight =
+    SVG_H * scale;
+
+
+  if (
+    mapWidth <=
+    viewportWidth
+  ) {
+
+    x =
+      (
+        viewportWidth -
+        mapWidth
+      ) / 2;
+
+  } else {
+
+    x =
       clamp(
-        scale * factor,
-        minScale,
-        8
+        x,
+        viewportWidth -
+          mapWidth,
+        0
+      );
+  }
+
+
+  if (
+    mapHeight <=
+    viewportHeight
+  ) {
+
+    y =
+      (
+        viewportHeight -
+        mapHeight
+      ) / 2;
+
+  } else {
+
+    y =
+      clamp(
+        y,
+        viewportHeight -
+          mapHeight,
+        0
+      );
+  }
+}
+
+
+/* =========================================================
+   RENDER
+   ========================================================= */
+
+function render() {
+
+  mapObject.style.transform =
+    `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
+
+
+  scheduleDetailUpdate();
+}
+
+
+/* =========================================================
+   RESET
+   ========================================================= */
+
+function resetView() {
+
+  scale =
+    minScale;
+
+
+  x =
+    (
+      viewport.clientWidth -
+      SVG_W * scale
+    ) / 2;
+
+
+  y =
+    (
+      viewport.clientHeight -
+      SVG_H * scale
+    ) / 2;
+
+
+  constrain();
+
+  render();
+}
+
+
+/* =========================================================
+   ZOOM AROUND POINTER
+   ========================================================= */
+
+function zoomAt(
+  factor,
+  clientX,
+  clientY
+) {
+
+  const rect =
+    viewport.getBoundingClientRect();
+
+
+  const pointerX =
+    clientX -
+    rect.left;
+
+  const pointerY =
+    clientY -
+    rect.top;
+
+
+  /*
+     Find the map coordinate currently
+     beneath the pointer.
+  */
+
+  const mapX =
+    (
+      pointerX -
+      x
+    ) / scale;
+
+  const mapY =
+    (
+      pointerY -
+      y
+    ) / scale;
+
+
+  const newScale =
+    clamp(
+      scale * factor,
+      minScale,
+      8
+    );
+
+
+  /*
+     Keep the same map point beneath
+     the mouse cursor.
+  */
+
+  x =
+    pointerX -
+    mapX * newScale;
+
+  y =
+    pointerY -
+    mapY * newScale;
+
+
+  scale =
+    newScale;
+
+
+  constrain();
+
+  render();
+}
+
+
+/* =========================================================
+   MOUSE WHEEL
+   ========================================================= */
+
+viewport.addEventListener(
+  "wheel",
+  event => {
+
+    event.preventDefault();
+
+
+    const factor =
+      Math.exp(
+        -event.deltaY *
+        0.0015
       );
 
 
+    zoomAt(
+      factor,
+      event.clientX,
+      event.clientY
+    );
+
+  },
+  {
+    passive: false
+  }
+);
+
+
+/* =========================================================
+   MOUSE DRAGGING
+   ========================================================= */
+
+viewport.addEventListener(
+  "pointerdown",
+  event => {
+
     /*
-      Reposition the map so that the same map point
-      remains underneath the pointer.
+       Only left mouse button.
     */
 
-    x =
-      pointerX -
-      mapX * newScale;
+    if (
+      event.pointerType ===
+        "mouse" &&
+      event.button !== 0
+    ) {
 
-    y =
-      pointerY -
-      mapY * newScale;
+      return;
+    }
 
 
-    scale = newScale;
+    dragging = true;
+
+
+    lastX =
+      event.clientX;
+
+    lastY =
+      event.clientY;
+
+
+    viewport.classList.add(
+      "dragging"
+    );
+
+
+    try {
+
+      viewport.setPointerCapture(
+        event.pointerId
+      );
+
+    } catch (_) {}
+  }
+);
+
+
+viewport.addEventListener(
+  "pointermove",
+  event => {
+
+    if (!dragging) {
+      return;
+    }
+
+
+    x +=
+      event.clientX -
+      lastX;
+
+    y +=
+      event.clientY -
+      lastY;
+
+
+    lastX =
+      event.clientX;
+
+    lastY =
+      event.clientY;
+
 
     constrain();
 
     render();
   }
+);
 
 
-  /*
-    MOUSE WHEEL ZOOM
-  */
+viewport.addEventListener(
+  "pointerup",
+  event => {
 
-  viewport.addEventListener(
-    "wheel",
-    event => {
+    dragging = false;
 
-      event.preventDefault();
 
-      const factor =
-        Math.exp(
-          -event.deltaY * 0.0015
-        );
+    viewport.classList.remove(
+      "dragging"
+    );
 
-      zoomAt(
-        factor,
-        event.clientX,
-        event.clientY
+
+    try {
+
+      viewport.releasePointerCapture(
+        event.pointerId
       );
 
-    },
-    {
-      passive: false
-    }
-  );
+    } catch (_) {}
+  }
+);
 
 
-  /*
-    MOUSE / PEN / TOUCH DRAGGING
-  */
+viewport.addEventListener(
+  "pointercancel",
+  () => {
 
-  viewport.addEventListener(
-    "pointerdown",
-    event => {
+    dragging = false;
 
-      if (
-        event.pointerType === "mouse" &&
-        event.button !== 0
-      ) {
-        return;
-      }
+    viewport.classList.remove(
+      "dragging"
+    );
+  }
+);
 
 
-      dragging = true;
+/* =========================================================
+   TOUCH PINCH
+   ========================================================= */
 
-      lastX = event.clientX;
-      lastY = event.clientY;
+viewport.addEventListener(
+  "touchstart",
+  event => {
 
-      viewport.classList.add(
-        "dragging"
-      );
+    if (
+      event.touches.length === 2
+    ) {
 
-
-      try {
-        viewport.setPointerCapture(
-          event.pointerId
-        );
-      } catch (_) {}
-    }
-  );
-
-
-  viewport.addEventListener(
-    "pointermove",
-    event => {
-
-      if (!dragging) {
-        return;
-      }
-
-
-      x +=
-        event.clientX -
-        lastX;
-
-      y +=
-        event.clientY -
-        lastY;
-
-
-      lastX = event.clientX;
-      lastY = event.clientY;
-
-
-      constrain();
-
-      render();
-    }
-  );
-
-
-  viewport.addEventListener(
-    "pointerup",
-    event => {
-
-      dragging = false;
-
-      viewport.classList.remove(
-        "dragging"
-      );
-
-
-      try {
-        viewport.releasePointerCapture(
-          event.pointerId
-        );
-      } catch (_) {}
-    }
-  );
-
-
-  viewport.addEventListener(
-    "pointercancel",
-    () => {
-
-      dragging = false;
-
-      viewport.classList.remove(
-        "dragging"
-      );
-    }
-  );
-
-
-  /*
-    PINCH ZOOM
-  */
-
-  viewport.addEventListener(
-    "touchstart",
-    event => {
-
-      if (
-        event.touches.length === 2
-      ) {
-
-        pinchDistance =
-          Math.hypot(
-            event.touches[0].clientX -
-            event.touches[1].clientX,
-
-            event.touches[0].clientY -
-            event.touches[1].clientY
-          );
-      }
-
-    },
-    {
-      passive: true
-    }
-  );
-
-
-  viewport.addEventListener(
-    "touchmove",
-    event => {
-
-      if (
-        event.touches.length !== 2 ||
-        pinchDistance === null
-      ) {
-        return;
-      }
-
-
-      const first =
+      const a =
         event.touches[0];
 
-      const second =
+      const b =
         event.touches[1];
 
 
-      const distance =
+      pinchDistance =
         Math.hypot(
-          first.clientX -
-          second.clientX,
+          a.clientX -
+            b.clientX,
 
-          first.clientY -
-          second.clientY
+          a.clientY -
+            b.clientY
         );
+    }
+
+  },
+  {
+    passive: true
+  }
+);
 
 
-      const factor =
-        distance / pinchDistance;
+viewport.addEventListener(
+  "touchmove",
+  event => {
+
+    if (
+      event.touches.length !== 2 ||
+      pinchDistance === null
+    ) {
+
+      return;
+    }
 
 
-      pinchDistance = distance;
+    const a =
+      event.touches[0];
+
+    const b =
+      event.touches[1];
 
 
-      zoomAt(
-        factor,
+    const distance =
+      Math.hypot(
+        a.clientX -
+          b.clientX,
 
-        (first.clientX +
-         second.clientX) / 2,
-
-        (first.clientY +
-         second.clientY) / 2
+        a.clientY -
+          b.clientY
       );
 
-    },
-    {
-      passive: true
+
+    const factor =
+      distance /
+      pinchDistance;
+
+
+    pinchDistance =
+      distance;
+
+
+    zoomAt(
+      factor,
+
+      (
+        a.clientX +
+        b.clientX
+      ) / 2,
+
+      (
+        a.clientY +
+        b.clientY
+      ) / 2
+    );
+
+  },
+  {
+    passive: true
+  }
+);
+
+
+viewport.addEventListener(
+  "touchend",
+  event => {
+
+    if (
+      event.touches.length <
+      2
+    ) {
+
+      pinchDistance =
+        null;
     }
-  );
+
+  },
+  {
+    passive: true
+  }
+);
 
 
-  viewport.addEventListener(
-    "touchend",
-    event => {
+/* =========================================================
+   BUTTONS
+   ========================================================= */
 
-      if (
-        event.touches.length < 2
-      ) {
-        pinchDistance = null;
-      }
-
-    },
-    {
-      passive: true
-    }
-  );
-
-
-  /*
-    UI BUTTONS
-  */
-
-  document
-    .getElementById("zoomIn")
-    .addEventListener(
-      "click",
-      () => {
-
-        zoomAt(
-          1.5,
-          viewport.clientWidth / 2,
-          viewport.clientHeight / 2
-        );
-      }
-    );
-
-
-  document
-    .getElementById("zoomOut")
-    .addEventListener(
-      "click",
-      () => {
-
-        zoomAt(
-          1 / 1.5,
-          viewport.clientWidth / 2,
-          viewport.clientHeight / 2
-        );
-      }
-    );
-
-
-  document
-    .getElementById("reset")
-    .addEventListener(
-      "click",
-      resetView
-    );
-
-
-  /*
-    LOAD THE EXTERNAL SVG
-
-    Because the SVG is loaded through <object>,
-    its internal groups can be accessed once loading
-    has completed.
-  */
-
-  mapObject.addEventListener(
-    "load",
+document
+  .getElementById("zoomIn")
+  .addEventListener(
+    "click",
     () => {
 
-      try {
+      zoomAt(
+        1.5,
 
-        svg =
-          mapObject
-            .contentDocument
-            .querySelector("svg");
+        viewport.clientWidth /
+          2,
 
-
-        if (!svg) {
-          throw new Error(
-            "SVG root not found"
-          );
-        }
+        viewport.clientHeight /
+          2
+      );
+    }
+  );
 
 
-        /*
-          Cache the real burg heraldry.
-        */
+document
+  .getElementById("zoomOut")
+  .addEventListener(
+    "click",
+    () => {
 
-        cacheBurgUses();
+      zoomAt(
+        1 / 1.5,
+
+        viewport.clientWidth /
+          2,
+
+        viewport.clientHeight /
+          2
+      );
+    }
+  );
 
 
-        /*
-          Apply the LOW-ZOOM STATE FIRST.
+document
+  .getElementById("reset")
+  .addEventListener(
+    "click",
+    resetView
+  );
 
-          This is important for performance:
-          the browser should not initially render
-          every small settlement shield.
-        */
 
-        setDisplay(
-          "stateEmblems",
-          true
+/* =========================================================
+   LOAD SVG
+   ========================================================= */
+
+mapObject.addEventListener(
+  "load",
+  () => {
+
+    try {
+
+      svg =
+        mapObject
+          .contentDocument
+          .querySelector("svg");
+
+
+      if (!svg) {
+
+        throw new Error(
+          "SVG root not found"
         );
-
-        setDisplay(
-          "provinceEmblems",
-          true
-        );
-
-
-        /*
-          Hide the normal Azgaar burg icons.
-        */
-
-        setDisplay(
-          "burgIcons",
-          false
-        );
-
-
-        /*
-          Hide all small burg heraldry initially.
-        */
-
-        setDisplay(
-          "burgEmblems",
-          false
-        );
-
-
-        /*
-          Large labels remain visible.
-        */
-
-        setDisplay(
-          "labels-state",
-          true
-        );
-
-        setDisplay(
-          "labels-province",
-          true
-        );
-
-        setDisplay(
-          "labels-capital",
-          true
-        );
-
-
-        /*
-          Smaller labels begin disabled.
-        */
-
-        setDisplay(
-          "labels-city",
-          false
-        );
-
-        setDisplay(
-          "labels-fort",
-          false
-        );
-
-        setDisplay(
-          "labels-town",
-          false
-        );
-
-        setDisplay(
-          "labels-village",
-          false
-        );
-
-
-        resize();
-
-        resetView();
-
-
-        status.textContent =
-          "Zoom out = political map • zoom in = settlement detail";
-
-      } catch (error) {
-
-        console.error(error);
-
-        status.textContent =
-          "Map loaded, but layer controls could not be initialized.";
       }
+
+
+      /*
+         Find all real burg heraldry once.
+      */
+
+      cacheBurgUses();
+
+
+      /*
+         Increase the size of the actual
+         generated burg shields.
+      */
+
+      resizeBurgEmblems();
+
+
+      /*
+         INITIAL LOW-ZOOM STATE
+
+         Only STATE emblems are visible.
+
+         Province and burg emblems are hidden.
+      */
+
+      setDisplay(
+        "stateEmblems",
+        true
+      );
+
+      setDisplay(
+        "provinceEmblems",
+        false
+      );
+
+      setDisplay(
+        "burgEmblems",
+        false
+      );
+
+
+      /*
+         Remove Azgaar's white burg circles
+         and port anchors.
+      */
+
+      setDisplay(
+        "burgIcons",
+        false
+      );
+
+
+      /*
+         Large political labels.
+      */
+
+      setDisplay(
+        "labels-state",
+        true
+      );
+
+      setDisplay(
+        "labels-province",
+        true
+      );
+
+      setDisplay(
+        "labels-capital",
+        true
+      );
+
+
+      /*
+         Smaller settlement labels begin hidden.
+      */
+
+      setDisplay(
+        "labels-city",
+        false
+      );
+
+      setDisplay(
+        "labels-town",
+        false
+      );
+
+      setDisplay(
+        "labels-fort",
+        false
+      );
+
+      setDisplay(
+        "labels-village",
+        false
+      );
+
+
+      /*
+         Fit map to screen.
+      */
+
+      resize();
+
+      resetView();
+
+
+      status.textContent =
+        "Zoom out = political map • zoom in = settlement detail";
+
+
+    } catch (error) {
+
+      console.error(error);
+
+
+      status.textContent =
+        "Map loaded, but layer controls could not be initialized.";
     }
-  );
+  }
+);
 
 
-  /*
-    Keep the map correctly fitted if the browser
-    window changes size.
-  */
+/* =========================================================
+   WINDOW RESIZE
+   ========================================================= */
 
-  window.addEventListener(
-    "resize",
-    resize
-  );
-
-
-  /*
-    Prevent the browser from treating the embedded
-    SVG like a normal draggable image.
-  */
-
-  mapObject.addEventListener(
-    "dragstart",
-    event => {
-      event.preventDefault();
-    }
-  );
+window.addEventListener(
+  "resize",
+  resize
+);
 
 })();
+
 </script>
 
 </body>
