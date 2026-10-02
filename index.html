@@ -12,6 +12,10 @@
 
 <style>
 
+/* =========================================================
+   GENERAL
+   ========================================================= */
+
 * {
   box-sizing: border-box;
 }
@@ -44,6 +48,13 @@ body {
   touch-action: none;
 
   background: #111;
+
+  /*
+     Prevent unnecessary browser rendering work outside
+     the visible map area.
+  */
+
+  contain: strict;
 }
 
 #viewport.dragging {
@@ -52,17 +63,11 @@ body {
 
 
 /*
-   IMPORTANT:
+   The SVG is purely visual.
 
-   The SVG object no longer receives mouse input directly.
-
-   This means the parent viewport receives:
-
-   - dragging
-   - mouse wheel
-   - touch gestures
-
-   while the SVG remains purely visual.
+   pointer-events:none is important because it allows
+   the parent viewport to receive the mouse wheel and
+   dragging events.
 */
 
 #mapObject {
@@ -82,6 +87,72 @@ body {
   -webkit-user-drag: none;
 
   pointer-events: none;
+
+  /*
+     Tell the browser this element is going to be
+     transformed frequently.
+  */
+
+  will-change: transform;
+}
+
+
+/* =========================================================
+   CAELORA TITLE
+   ========================================================= */
+
+#title {
+
+  position: fixed;
+
+  z-index: 30;
+
+  top: 18px;
+  left: 22px;
+
+  pointer-events: none;
+
+  color: #eee;
+
+  /*
+     Fantasy / medieval-style font stack.
+
+     Cinzel is used if available; the fallbacks ensure
+     the title still looks appropriate if it isn't installed.
+  */
+
+  font-family:
+    "Cinzel Decorative",
+    "Cinzel",
+    "Trajan Pro",
+    "Times New Roman",
+    Georgia,
+    serif;
+
+  font-size: 27px;
+
+  font-weight: 600;
+
+  letter-spacing: 2.5px;
+
+  text-shadow:
+    0 2px 4px rgba(0,0,0,.9),
+    0 0 10px rgba(0,0,0,.65);
+
+  white-space: nowrap;
+
+  opacity: .95;
+}
+
+#title .year {
+
+  font-size: .72em;
+
+  letter-spacing: 2px;
+
+  margin-left: 5px;
+
+  opacity: .88;
 }
 
 
@@ -93,20 +164,29 @@ body {
 
   position: fixed;
 
-  z-index: 20;
+  z-index: 30;
 
   top: 14px;
   right: 14px;
 
   display: flex;
 
-  gap: 6px;
+  gap: 5px;
 
-  padding: 6px;
+  padding: 5px;
 
-  border-radius: 8px;
+  border-radius: 7px;
 
-  background: rgba(20,20,20,.78);
+  /*
+     DARK UI
+  */
+
+  background: rgba(18,18,18,.92);
+
+  border: 1px solid rgba(255,255,255,.14);
+
+  box-shadow:
+    0 3px 12px rgba(0,0,0,.45);
 
   backdrop-filter: blur(5px);
 }
@@ -116,21 +196,35 @@ button {
   width: 38px;
   height: 34px;
 
-  border: 0;
+  border: 1px solid rgba(255,255,255,.10);
 
   border-radius: 5px;
 
-  background: #eee;
+  background: #242424;
 
-  color: #111;
+  color: #eee;
 
   font-size: 19px;
 
+  line-height: 1;
+
   cursor: pointer;
+
+  transition:
+    background .12s ease,
+    border-color .12s ease;
 }
 
 button:hover {
-  background: #fff;
+
+  background: #333;
+
+  border-color:
+    rgba(255,255,255,.22);
+}
+
+button:active {
+  background: #181818;
 }
 
 
@@ -142,7 +236,7 @@ button:hover {
 
   position: fixed;
 
-  z-index: 20;
+  z-index: 30;
 
   left: 14px;
   bottom: 14px;
@@ -151,13 +245,18 @@ button:hover {
 
   border-radius: 5px;
 
-  color: #eee;
+  color: #ddd;
 
-  background: rgba(20,20,20,.68);
+  background: rgba(18,18,18,.68);
+
+  border: 1px solid
+    rgba(255,255,255,.08);
 
   font: 12px/1.2 system-ui, sans-serif;
 
   pointer-events: none;
+
+  opacity: .82;
 }
 
 </style>
@@ -166,6 +265,10 @@ button:hover {
 
 <body>
 
+
+<!-- =======================================================
+     MAP
+     ======================================================= -->
 
 <div id="viewport">
 
@@ -177,6 +280,19 @@ button:hover {
 
 </div>
 
+
+<!-- =======================================================
+     TITLE
+     ======================================================= -->
+
+<div id="title">
+  Caelora <span class="year">1246 S.C.</span>
+</div>
+
+
+<!-- =======================================================
+     CONTROLS
+     ======================================================= -->
 
 <div id="controls">
 
@@ -214,11 +330,16 @@ button:hover {
 
 
 /* =========================================================
-   BASIC MAP SETTINGS
+   MAP DIMENSIONS
    ========================================================= */
 
 const SVG_W = 1920;
 const SVG_H = 1080;
+
+
+/* =========================================================
+   ELEMENT REFERENCES
+   ========================================================= */
 
 const viewport =
   document.getElementById("viewport");
@@ -230,6 +351,10 @@ const status =
   document.getElementById("status");
 
 
+/* =========================================================
+   VIEW STATE
+   ========================================================= */
+
 let svg = null;
 
 let scale = 1;
@@ -237,21 +362,26 @@ let scale = 1;
 let minScale = 1;
 
 let x = 0;
+
 let y = 0;
 
+
+/* =========================================================
+   INPUT STATE
+   ========================================================= */
 
 let dragging = false;
 
 let lastX = 0;
+
 let lastY = 0;
 
 let pinchDistance = null;
 
 
-/*
-   requestAnimationFrame is used so rapid mouse-wheel
-   movement does not continuously manipulate the SVG DOM.
-*/
+/* =========================================================
+   PERFORMANCE STATE
+   ========================================================= */
 
 let raf = 0;
 
@@ -259,36 +389,23 @@ let lastDetailState = "";
 
 
 /* =========================================================
-   ZOOM LEVELS
+   DETAIL THRESHOLDS
    =========================================================
 
-   These deliberately create a gradual progression:
+   Minimum zoom:
+     STATE EMBLEMS ONLY
 
-   MINIMUM
-      State emblems only
+   Zoom in:
+     Province emblems
+     City labels
+     Burg shields
+     Town labels
+     Fort labels
+     Village labels
 
-   1.25x
-      Province emblems
-
-   1.45x
-      First burg shields
-
-   1.70x
-      City labels
-
-   1.90x
-      More burg shields + town labels
-
-   2.30x
-      Fort labels
-
-   2.60x
-      Most burg shields + village labels
-
-   3.00x
-      All burg shields
+   The thresholds are deliberately spread out so the map
+   doesn't suddenly become overloaded with detail.
 */
-
 
 const DETAIL = {
 
@@ -314,24 +431,14 @@ const DETAIL = {
 
 
 /* =========================================================
-   BURG SHIELD SIZE
-   =========================================================
+   BURG ELEMENT CACHE
+   ========================================================= */
 
-   The exported Azgaar burg shields are very small.
-
-   Increasing the font size of the burgEmblems group makes
-   the existing 1em heraldic <use> elements larger without
-   replacing them with fake graphics.
-
-   1.7em keeps them small enough to belong on the map while
-   making them considerably more readable.
-*/
-
-const BURG_EMBLEM_SIZE = "1.7em";
+let burgUses = [];
 
 
 /* =========================================================
-   UTILITY
+   CLAMP
    ========================================================= */
 
 function clamp(
@@ -365,7 +472,7 @@ function getGroup(id) {
 
 
 /* =========================================================
-   SHOW / HIDE SVG GROUP
+   DISPLAY CONTROL
    ========================================================= */
 
 function setDisplay(
@@ -386,11 +493,13 @@ function setDisplay(
 
 
 /* =========================================================
-   BURG SHIELD CACHE
-   ========================================================= */
+   CACHE BURG SHIELDS
+   =========================================================
 
-let burgUses = [];
+   This search happens ONCE.
 
+   We don't repeatedly search the 32 MB SVG during zooming.
+*/
 
 function cacheBurgUses() {
 
@@ -415,36 +524,7 @@ function cacheBurgUses() {
 
 
 /* =========================================================
-   MAKE BURG SHIELDS LARGER
-   ========================================================= */
-
-function resizeBurgEmblems() {
-
-  const group =
-    getGroup("burgEmblems");
-
-  if (!group) {
-    return;
-  }
-
-
-  /*
-     The individual shields use:
-
-       width="1em"
-       height="1em"
-
-     so increasing font-size increases the actual
-     rendered heraldry.
-  */
-
-  group.style.fontSize =
-    BURG_EMBLEM_SIZE;
-}
-
-
-/* =========================================================
-   REVEAL A PORTION OF THE BURG SHIELDS
+   BURG SHIELD VISIBILITY
    ========================================================= */
 
 function showBurgFraction(
@@ -478,7 +558,7 @@ function showBurgFraction(
 
 
 /* =========================================================
-   UPDATE DETAIL LEVEL
+   UPDATE DETAIL LAYERS
    ========================================================= */
 
 function updateDetailLayers() {
@@ -490,6 +570,12 @@ function updateDetailLayers() {
 
   const s = scale;
 
+
+  /*
+     Determine the current detail tier.
+
+     We only modify the SVG when moving between tiers.
+  */
 
   let detailState;
 
@@ -529,10 +615,7 @@ function updateDetailLayers() {
 
 
   /*
-     If we haven't crossed a threshold,
-     don't touch the SVG.
-
-     This is important for performance.
+     No DOM work if we haven't crossed a threshold.
   */
 
   if (
@@ -553,7 +636,8 @@ function updateDetailLayers() {
 
      ALWAYS VISIBLE.
 
-     These are the only emblems visible at minimum zoom.
+     These are the only heraldic emblems visible at
+     minimum zoom.
      ======================================================= */
 
   setDisplay(
@@ -575,15 +659,11 @@ function updateDetailLayers() {
 
 
   /* =======================================================
-     BURG ICONS
+     NORMAL BURG ICONS
 
      ALWAYS HIDDEN.
 
-     This removes:
-
-       white settlement circles
-       white port circles
-       anchor symbols
+     Removes the white circles and port anchors.
      ======================================================= */
 
   setDisplay(
@@ -593,8 +673,7 @@ function updateDetailLayers() {
 
 
   /* =======================================================
-     LARGE LABELS
-
+     LARGE POLITICAL LABELS
      ======================================================= */
 
   setDisplay(
@@ -663,7 +742,7 @@ function updateDetailLayers() {
   ) {
 
     /*
-       No small shields at minimum zoom.
+       No small settlement shields at minimum zoom.
     */
 
     setDisplay(
@@ -674,7 +753,7 @@ function updateDetailLayers() {
   } else {
 
     /*
-       Enable the real burg heraldry.
+       Enable the actual Azgaar-generated heraldry.
     */
 
     setDisplay(
@@ -684,7 +763,9 @@ function updateDetailLayers() {
 
 
     /*
-       Gradually reveal more shields.
+       Gradually reveal the existing shields.
+
+       Their ORIGINAL SVG size is preserved.
     */
 
     if (
@@ -725,7 +806,7 @@ function updateDetailLayers() {
 
 
 /* =========================================================
-   SCHEDULE DETAIL UPDATE
+   REQUEST DETAIL UPDATE
    ========================================================= */
 
 function scheduleDetailUpdate() {
@@ -795,7 +876,7 @@ function resize() {
 
 
 /* =========================================================
-   CONSTRAIN MAP
+   MAP BOUNDS
    ========================================================= */
 
 function constrain() {
@@ -876,7 +957,7 @@ function render() {
 
 
 /* =========================================================
-   RESET
+   RESET VIEW
    ========================================================= */
 
 function resetView() {
@@ -929,8 +1010,7 @@ function zoomAt(
 
 
   /*
-     Find the map coordinate currently
-     beneath the pointer.
+     Map coordinate beneath pointer.
   */
 
   const mapX =
@@ -955,8 +1035,7 @@ function zoomAt(
 
 
   /*
-     Keep the same map point beneath
-     the mouse cursor.
+     Keep that map point beneath the cursor.
   */
 
   x =
@@ -979,7 +1058,7 @@ function zoomAt(
 
 
 /* =========================================================
-   MOUSE WHEEL
+   MOUSE WHEEL ZOOM
    ========================================================= */
 
 viewport.addEventListener(
@@ -1010,16 +1089,12 @@ viewport.addEventListener(
 
 
 /* =========================================================
-   MOUSE DRAGGING
+   DRAGGING
    ========================================================= */
 
 viewport.addEventListener(
   "pointerdown",
   event => {
-
-    /*
-       Only left mouse button.
-    */
 
     if (
       event.pointerType ===
@@ -1126,7 +1201,7 @@ viewport.addEventListener(
 
 
 /* =========================================================
-   TOUCH PINCH
+   TOUCH PINCH ZOOM
    ========================================================= */
 
 viewport.addEventListener(
@@ -1316,26 +1391,20 @@ mapObject.addEventListener(
 
 
       /*
-         Find all real burg heraldry once.
+         Cache the actual generated burg shields.
       */
 
       cacheBurgUses();
 
 
       /*
-         Increase the size of the actual
-         generated burg shields.
-      */
+         MINIMUM-ZOOM STATE
 
-      resizeBurgEmblems();
+         Only STATE emblems.
 
-
-      /*
-         INITIAL LOW-ZOOM STATE
-
-         Only STATE emblems are visible.
-
-         Province and burg emblems are hidden.
+         No province emblems.
+         No burg emblems.
+         No burg circles.
       */
 
       setDisplay(
@@ -1353,12 +1422,6 @@ mapObject.addEventListener(
         false
       );
 
-
-      /*
-         Remove Azgaar's white burg circles
-         and port anchors.
-      */
-
       setDisplay(
         "burgIcons",
         false
@@ -1366,7 +1429,7 @@ mapObject.addEventListener(
 
 
       /*
-         Large political labels.
+         Large labels remain available.
       */
 
       setDisplay(
@@ -1386,7 +1449,7 @@ mapObject.addEventListener(
 
 
       /*
-         Smaller settlement labels begin hidden.
+         Smaller labels start hidden.
       */
 
       setDisplay(
@@ -1411,7 +1474,7 @@ mapObject.addEventListener(
 
 
       /*
-         Fit map to screen.
+         Fit the map to the screen.
       */
 
       resize();
