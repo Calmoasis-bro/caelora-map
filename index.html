@@ -1,20 +1,1137 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Caelora — Interactive Map</title><style>*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#111;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}#viewport{position:fixed;inset:0;overflow:hidden;cursor:grab;touch-action:none;background:#111}#viewport.dragging{cursor:grabbing}#mapObject{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0;user-select:none;-webkit-user-drag:none}#controls{position:fixed;z-index:20;top:14px;right:14px;display:flex;gap:6px;padding:6px;border-radius:8px;background:rgba(20,20,20,.78);backdrop-filter:blur(5px)}button{width:38px;height:34px;border:0;border-radius:5px;background:#eee;color:#111;font-size:19px;cursor:pointer}button:hover{background:#fff}#status{position:fixed;z-index:20;left:14px;bottom:14px;padding:5px 8px;border-radius:5px;color:#eee;background:rgba(20,20,20,.68);font:12px/1.2 system-ui,sans-serif;pointer-events:none}</style></head><body><div id="viewport"><object id="mapObject" data="caelora.svg" type="image/svg+xml"></object></div><div id="controls"><button id="zoomOut" title="Zoom out">−</button><button id="reset" title="Reset view">⌂</button><button id="zoomIn" title="Zoom in">+</button></div><div id="status">Loading map…</div><script>
-(()=>{"use strict";const W=1920,H=1080,v=document.getElementById("viewport"),o=document.getElementById("mapObject"),st=document.getElementById("status");let svg=null,s=1,minS=1,x=0,y=0,drag=false,lx=0,ly=0,pinch=null,raf=0,last="",burg=[];
-const T={city:1.12,b1:1.45,fort:1.40,town:1.75,b2:1.90,village:2.35,b3:2.55,b4:3.10};
-const clamp=(n,a,b)=>Math.max(a,Math.min(b,n)),g=id=>svg&&svg.getElementById(id);function disp(id,on){const e=g(id);if(e)e.style.display=on?"":"none"}
-function cache(){const e=g("burgEmblems");burg=e?Array.from(e.querySelectorAll(":scope > use")):[]}
-function fraction(f){if(!burg.length)return;const n=Math.ceil(burg.length*f);for(let i=0;i<burg.length;i++)burg[i].style.display=i<n?"":"none"}
-function layers(){if(!svg)return;const z=s< T.b1?0:s<T.b2?1:s<T.b3?2:s<T.b4?3:4;if(String(z)===last)return;last=String(z);disp("stateEmblems",true);disp("provinceEmblems",true);disp("burgIcons",false);disp("labels-state",true);disp("labels-province",true);disp("labels-capital",true);disp("labels-city",s>=T.city);disp("labels-fort",s>=T.fort);disp("labels-town",s>=T.town);disp("labels-village",s>=T.village);if(s<T.b1)disp("burgEmblems",false);else{disp("burgEmblems",true);if(s<T.b2)fraction(.25);else if(s<T.b3)fraction(.5);else if(s<T.b4)fraction(.8);else fraction(1)}}
-function schedule(){if(raf)return;raf=requestAnimationFrame(()=>{raf=0;layers();st.textContent=`Zoom ${s.toFixed(2)}×`})}
-function constrain(){const vw=v.clientWidth,vh=v.clientHeight,w=W*s,h=H*s;if(w<=vw)x=(vw-w)/2;else x=clamp(x,vw-w,0);if(h<=vh)y=(vh-h)/2;else y=clamp(y,vh-h,0)}
-function render(){o.style.transform=`translate3d(${x}px,${y}px,0) scale(${s})`;schedule()}
-function resize(){minS=Math.min(v.clientWidth/W,v.clientHeight/H);if(!isFinite(minS)||minS<=0)minS=.1;s=Math.max(s,minS);constrain();render()}
-function reset(){s=minS;x=(v.clientWidth-W*s)/2;y=(v.clientHeight-H*s)/2;constrain();render()}
-function zoom(f,cx,cy){const r=v.getBoundingClientRect(),px=cx-r.left,py=cy-r.top,mx=(px-x)/s,my=(py-y)/s,ns=clamp(s*f,minS,8);x=px-mx*ns;y=py-my*ns;s=ns;constrain();render()}
-v.addEventListener("wheel",e=>{e.preventDefault();zoom(Math.exp(-e.deltaY*.0015),e.clientX,e.clientY)},{passive:false});
-v.addEventListener("pointerdown",e=>{if(e.pointerType==="mouse"&&e.button!==0)return;drag=true;lx=e.clientX;ly=e.clientY;v.classList.add("dragging");try{v.setPointerCapture(e.pointerId)}catch(_){} });
-v.addEventListener("pointermove",e=>{if(!drag)return;x+=e.clientX-lx;y+=e.clientY-ly;lx=e.clientX;ly=e.clientY;constrain();render()});v.addEventListener("pointerup",e=>{drag=false;v.classList.remove("dragging");try{v.releasePointerCapture(e.pointerId)}catch(_){} });v.addEventListener("pointercancel",()=>{drag=false;v.classList.remove("dragging")});
-v.addEventListener("touchstart",e=>{if(e.touches.length===2)pinch=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY)},{passive:true});v.addEventListener("touchmove",e=>{if(e.touches.length!==2||pinch===null)return;const a=e.touches[0],b=e.touches[1],d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);zoom(d/pinch,(a.clientX+b.clientX)/2,(a.clientY+b.clientY)/2);pinch=d},{passive:true});v.addEventListener("touchend",e=>{if(e.touches.length<2)pinch=null},{passive:true});
-document.getElementById("zoomIn").onclick=()=>zoom(1.5,v.clientWidth/2,v.clientHeight/2);document.getElementById("zoomOut").onclick=()=>zoom(1/1.5,v.clientWidth/2,v.clientHeight/2);document.getElementById("reset").onclick=reset;
-o.addEventListener("load",()=>{try{svg=o.contentDocument.querySelector("svg");if(!svg)throw Error("SVG root not found");cache();disp("stateEmblems",true);disp("provinceEmblems",true);disp("burgIcons",false);disp("burgEmblems",false);disp("labels-state",true);disp("labels-province",true);disp("labels-capital",true);disp("labels-city",false);disp("labels-fort",false);disp("labels-town",false);disp("labels-village",false);resize();reset();st.textContent="Zoom out = political map • zoom in = settlement detail"}catch(e){console.error(e);st.textContent="Map loaded, but layer controls could not be initialized."}});window.addEventListener("resize",resize);o.addEventListener("dragstart",e=>e.preventDefault())})();
-</script></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Caelora — Interactive Map</title>
+
+<style>
+  * {
+    box-sizing: border-box;
+  }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: #111;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+
+  #viewport {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    cursor: grab;
+    touch-action: none;
+    background: #111;
+  }
+
+  #viewport.dragging {
+    cursor: grabbing;
+  }
+
+  #mapObject {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1920px;
+    height: 1080px;
+    transform-origin: 0 0;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+
+  #controls {
+    position: fixed;
+    z-index: 20;
+    top: 14px;
+    right: 14px;
+    display: flex;
+    gap: 6px;
+    padding: 6px;
+    border-radius: 8px;
+    background: rgba(20,20,20,.78);
+    backdrop-filter: blur(5px);
+  }
+
+  button {
+    width: 38px;
+    height: 34px;
+    border: 0;
+    border-radius: 5px;
+    background: #eee;
+    color: #111;
+    font-size: 19px;
+    cursor: pointer;
+  }
+
+  button:hover {
+    background: #fff;
+  }
+
+  #status {
+    position: fixed;
+    z-index: 20;
+    left: 14px;
+    bottom: 14px;
+    padding: 5px 8px;
+    border-radius: 5px;
+    color: #eee;
+    background: rgba(20,20,20,.68);
+    font: 12px/1.2 system-ui, sans-serif;
+    pointer-events: none;
+  }
+</style>
+</head>
+
+<body>
+
+<div id="viewport">
+  <object
+    id="mapObject"
+    data="caelora.svg"
+    type="image/svg+xml">
+  </object>
+</div>
+
+<div id="controls">
+  <button id="zoomOut" title="Zoom out">−</button>
+  <button id="reset" title="Reset view">⌂</button>
+  <button id="zoomIn" title="Zoom in">+</button>
+</div>
+
+<div id="status">Loading map…</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const SVG_W = 1920;
+  const SVG_H = 1080;
+
+  const viewport = document.getElementById("viewport");
+  const mapObject = document.getElementById("mapObject");
+  const status = document.getElementById("status");
+
+  let svg = null;
+
+  let scale = 1;
+  let minScale = 1;
+
+  let x = 0;
+  let y = 0;
+
+  let dragging = false;
+  let lastX = 0;
+  let lastY = 0;
+
+  let pinchDistance = null;
+
+  let raf = 0;
+  let lastLayerState = "";
+
+  /*
+    Zoom thresholds.
+
+    The map starts with only the large-scale political
+    information visible.
+
+    As the user zooms in, progressively more settlement
+    information is enabled.
+  */
+
+  const DETAIL = {
+
+    // Province heraldry remains available from minimum zoom.
+    provinceEmblems: 1.00,
+
+    // Major city labels.
+    cityLabels: 1.12,
+
+    // First stage of smaller burg heraldry.
+    burgEmblems1: 1.45,
+
+    // Fort labels.
+    fortLabels: 1.40,
+
+    // Town labels.
+    townLabels: 1.75,
+
+    // Second stage of burg heraldry.
+    burgEmblems2: 1.90,
+
+    // Village labels.
+    villageLabels: 2.35,
+
+    // Third stage of burg heraldry.
+    burgEmblems3: 2.55,
+
+    // All burg heraldry.
+    burgEmblems4: 3.10
+  };
+
+
+  function clamp(value, minimum, maximum) {
+    return Math.max(
+      minimum,
+      Math.min(maximum, value)
+    );
+  }
+
+
+  function getGroup(id) {
+
+    if (!svg) {
+      return null;
+    }
+
+    return svg.getElementById(id);
+  }
+
+
+  /*
+    Show or hide an entire SVG layer.
+
+    display:none is intentional here.
+
+    This is preferable to opacity:0 or visibility:hidden
+    for the large number of small SVG elements because
+    the browser does not need to paint the hidden layer.
+  */
+
+  function setDisplay(id, visible) {
+
+    const element = getGroup(id);
+
+    if (element) {
+      element.style.display = visible ? "" : "none";
+    }
+  }
+
+
+  /*
+    burgEmblems is one group in the exported Azgaar SVG.
+
+    Inside it are individual <use> elements which reference
+    the actual generated burg coats of arms.
+
+    We cache those elements once rather than repeatedly
+    searching the SVG while zooming.
+  */
+
+  let burgUses = [];
+
+
+  function cacheBurgUses() {
+
+    const group = getGroup("burgEmblems");
+
+    if (!group) {
+      burgUses = [];
+      return;
+    }
+
+    burgUses =
+      Array.from(
+        group.querySelectorAll(":scope > use")
+      );
+  }
+
+
+  /*
+    Reveal a percentage of the actual burg shields.
+
+    This does NOT create replacement icons.
+
+    It uses the real heraldry already contained in caelora.svg.
+  */
+
+  function showBurgFraction(fraction) {
+
+    if (!burgUses.length) {
+      return;
+    }
+
+    const count =
+      Math.ceil(
+        burgUses.length * fraction
+      );
+
+    for (
+      let i = 0;
+      i < burgUses.length;
+      i++
+    ) {
+
+      burgUses[i].style.display =
+        i < count ? "" : "none";
+    }
+  }
+
+
+  /*
+    Update all detail layers.
+
+    This function is only allowed to perform expensive
+    visibility work when a zoom threshold is crossed.
+  */
+
+  function updateDetailLayers() {
+
+    if (!svg) {
+      return;
+    }
+
+    const currentScale = scale;
+
+    let state;
+
+
+    if (
+      currentScale <
+      DETAIL.burgEmblems1
+    ) {
+
+      state = "0";
+
+    } else if (
+      currentScale <
+      DETAIL.burgEmblems2
+    ) {
+
+      state = "1";
+
+    } else if (
+      currentScale <
+      DETAIL.burgEmblems3
+    ) {
+
+      state = "2";
+
+    } else if (
+      currentScale <
+      DETAIL.burgEmblems4
+    ) {
+
+      state = "3";
+
+    } else {
+
+      state = "4";
+    }
+
+
+    /*
+      If we haven't crossed a detail threshold,
+      don't touch the SVG.
+
+      This prevents unnecessary DOM operations during
+      continuous mouse-wheel zooming.
+    */
+
+    if (
+      state === lastLayerState
+    ) {
+      return;
+    }
+
+    lastLayerState = state;
+
+
+    /*
+      LARGE-SCALE POLITICAL HERALDRY
+
+      These remain visible at minimum zoom.
+    */
+
+    setDisplay(
+      "stateEmblems",
+      true
+    );
+
+    setDisplay(
+      "provinceEmblems",
+      true
+    );
+
+
+    /*
+      Remove Azgaar's normal burg icons.
+
+      This removes the white settlement circles
+      and port anchor symbols.
+
+      The actual heraldic shields are handled separately.
+    */
+
+    setDisplay(
+      "burgIcons",
+      false
+    );
+
+
+    /*
+      LARGE-SCALE LABELS
+    */
+
+    setDisplay(
+      "labels-state",
+      true
+    );
+
+    setDisplay(
+      "labels-province",
+      true
+    );
+
+    setDisplay(
+      "labels-capital",
+      true
+    );
+
+
+    /*
+      PROGRESSIVELY SMALLER LABELS
+    */
+
+    setDisplay(
+      "labels-city",
+      currentScale >= DETAIL.cityLabels
+    );
+
+    setDisplay(
+      "labels-fort",
+      currentScale >= DETAIL.fortLabels
+    );
+
+    setDisplay(
+      "labels-town",
+      currentScale >= DETAIL.townLabels
+    );
+
+    setDisplay(
+      "labels-village",
+      currentScale >= DETAIL.villageLabels
+    );
+
+
+    /*
+      PROGRESSIVELY REVEALED BURG SHIELDS
+    */
+
+    if (
+      currentScale <
+      DETAIL.burgEmblems1
+    ) {
+
+      /*
+        At minimum zoom, don't render the small
+        settlement shields at all.
+      */
+
+      setDisplay(
+        "burgEmblems",
+        false
+      );
+
+    } else {
+
+      /*
+        The burg emblem layer becomes available.
+      */
+
+      setDisplay(
+        "burgEmblems",
+        true
+      );
+
+
+      /*
+        Reveal progressively more of the actual
+        generated shields as the user zooms in.
+      */
+
+      if (
+        currentScale <
+        DETAIL.burgEmblems2
+      ) {
+
+        showBurgFraction(0.25);
+
+      } else if (
+        currentScale <
+        DETAIL.burgEmblems3
+      ) {
+
+        showBurgFraction(0.50);
+
+      } else if (
+        currentScale <
+        DETAIL.burgEmblems4
+      ) {
+
+        showBurgFraction(0.80);
+
+      } else {
+
+        showBurgFraction(1.00);
+      }
+    }
+  }
+
+
+  /*
+    Schedule a detail update on the next animation frame.
+
+    This prevents a large number of zoom events from
+    hammering the SVG DOM simultaneously.
+  */
+
+  function scheduleDetailUpdate() {
+
+    if (raf) {
+      return;
+    }
+
+    raf =
+      requestAnimationFrame(() => {
+
+        raf = 0;
+
+        updateDetailLayers();
+
+        status.textContent =
+          `Zoom ${scale.toFixed(2)}×`;
+      });
+  }
+
+
+  /*
+    Calculate the minimum scale required to fit the
+    complete 1920 × 1080 map inside the browser.
+  */
+
+  function resize() {
+
+    const viewportWidth =
+      viewport.clientWidth;
+
+    const viewportHeight =
+      viewport.clientHeight;
+
+
+    minScale =
+      Math.min(
+        viewportWidth / SVG_W,
+        viewportHeight / SVG_H
+      );
+
+
+    if (
+      !Number.isFinite(minScale) ||
+      minScale <= 0
+    ) {
+
+      minScale = 0.1;
+    }
+
+
+    scale =
+      Math.max(
+        scale,
+        minScale
+      );
+
+
+    constrain();
+
+    render();
+  }
+
+
+  /*
+    Prevent the map from being dragged completely
+    outside the viewport.
+  */
+
+  function constrain() {
+
+    const viewportWidth =
+      viewport.clientWidth;
+
+    const viewportHeight =
+      viewport.clientHeight;
+
+
+    const mapWidth =
+      SVG_W * scale;
+
+    const mapHeight =
+      SVG_H * scale;
+
+
+    if (mapWidth <= viewportWidth) {
+
+      x =
+        (viewportWidth - mapWidth) / 2;
+
+    } else {
+
+      x =
+        clamp(
+          x,
+          viewportWidth - mapWidth,
+          0
+        );
+    }
+
+
+    if (mapHeight <= viewportHeight) {
+
+      y =
+        (viewportHeight - mapHeight) / 2;
+
+    } else {
+
+      y =
+        clamp(
+          y,
+          viewportHeight - mapHeight,
+          0
+        );
+    }
+  }
+
+
+  /*
+    Apply the map transformation.
+  */
+
+  function render() {
+
+    mapObject.style.transform =
+      `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
+
+    scheduleDetailUpdate();
+  }
+
+
+  /*
+    Return to the minimum map scale.
+  */
+
+  function resetView() {
+
+    scale = minScale;
+
+    x =
+      (viewport.clientWidth -
+       SVG_W * scale) / 2;
+
+    y =
+      (viewport.clientHeight -
+       SVG_H * scale) / 2;
+
+    constrain();
+
+    render();
+  }
+
+
+  /*
+    Zoom around the mouse/touch position rather than
+    always zooming around the centre of the screen.
+  */
+
+  function zoomAt(
+    factor,
+    clientX,
+    clientY
+  ) {
+
+    const rect =
+      viewport.getBoundingClientRect();
+
+
+    const pointerX =
+      clientX - rect.left;
+
+    const pointerY =
+      clientY - rect.top;
+
+
+    /*
+      Determine which map coordinate is currently
+      underneath the pointer.
+    */
+
+    const mapX =
+      (pointerX - x) / scale;
+
+    const mapY =
+      (pointerY - y) / scale;
+
+
+    const newScale =
+      clamp(
+        scale * factor,
+        minScale,
+        8
+      );
+
+
+    /*
+      Reposition the map so that the same map point
+      remains underneath the pointer.
+    */
+
+    x =
+      pointerX -
+      mapX * newScale;
+
+    y =
+      pointerY -
+      mapY * newScale;
+
+
+    scale = newScale;
+
+    constrain();
+
+    render();
+  }
+
+
+  /*
+    MOUSE WHEEL ZOOM
+  */
+
+  viewport.addEventListener(
+    "wheel",
+    event => {
+
+      event.preventDefault();
+
+      const factor =
+        Math.exp(
+          -event.deltaY * 0.0015
+        );
+
+      zoomAt(
+        factor,
+        event.clientX,
+        event.clientY
+      );
+
+    },
+    {
+      passive: false
+    }
+  );
+
+
+  /*
+    MOUSE / PEN / TOUCH DRAGGING
+  */
+
+  viewport.addEventListener(
+    "pointerdown",
+    event => {
+
+      if (
+        event.pointerType === "mouse" &&
+        event.button !== 0
+      ) {
+        return;
+      }
+
+
+      dragging = true;
+
+      lastX = event.clientX;
+      lastY = event.clientY;
+
+      viewport.classList.add(
+        "dragging"
+      );
+
+
+      try {
+        viewport.setPointerCapture(
+          event.pointerId
+        );
+      } catch (_) {}
+    }
+  );
+
+
+  viewport.addEventListener(
+    "pointermove",
+    event => {
+
+      if (!dragging) {
+        return;
+      }
+
+
+      x +=
+        event.clientX -
+        lastX;
+
+      y +=
+        event.clientY -
+        lastY;
+
+
+      lastX = event.clientX;
+      lastY = event.clientY;
+
+
+      constrain();
+
+      render();
+    }
+  );
+
+
+  viewport.addEventListener(
+    "pointerup",
+    event => {
+
+      dragging = false;
+
+      viewport.classList.remove(
+        "dragging"
+      );
+
+
+      try {
+        viewport.releasePointerCapture(
+          event.pointerId
+        );
+      } catch (_) {}
+    }
+  );
+
+
+  viewport.addEventListener(
+    "pointercancel",
+    () => {
+
+      dragging = false;
+
+      viewport.classList.remove(
+        "dragging"
+      );
+    }
+  );
+
+
+  /*
+    PINCH ZOOM
+  */
+
+  viewport.addEventListener(
+    "touchstart",
+    event => {
+
+      if (
+        event.touches.length === 2
+      ) {
+
+        pinchDistance =
+          Math.hypot(
+            event.touches[0].clientX -
+            event.touches[1].clientX,
+
+            event.touches[0].clientY -
+            event.touches[1].clientY
+          );
+      }
+
+    },
+    {
+      passive: true
+    }
+  );
+
+
+  viewport.addEventListener(
+    "touchmove",
+    event => {
+
+      if (
+        event.touches.length !== 2 ||
+        pinchDistance === null
+      ) {
+        return;
+      }
+
+
+      const first =
+        event.touches[0];
+
+      const second =
+        event.touches[1];
+
+
+      const distance =
+        Math.hypot(
+          first.clientX -
+          second.clientX,
+
+          first.clientY -
+          second.clientY
+        );
+
+
+      const factor =
+        distance / pinchDistance;
+
+
+      pinchDistance = distance;
+
+
+      zoomAt(
+        factor,
+
+        (first.clientX +
+         second.clientX) / 2,
+
+        (first.clientY +
+         second.clientY) / 2
+      );
+
+    },
+    {
+      passive: true
+    }
+  );
+
+
+  viewport.addEventListener(
+    "touchend",
+    event => {
+
+      if (
+        event.touches.length < 2
+      ) {
+        pinchDistance = null;
+      }
+
+    },
+    {
+      passive: true
+    }
+  );
+
+
+  /*
+    UI BUTTONS
+  */
+
+  document
+    .getElementById("zoomIn")
+    .addEventListener(
+      "click",
+      () => {
+
+        zoomAt(
+          1.5,
+          viewport.clientWidth / 2,
+          viewport.clientHeight / 2
+        );
+      }
+    );
+
+
+  document
+    .getElementById("zoomOut")
+    .addEventListener(
+      "click",
+      () => {
+
+        zoomAt(
+          1 / 1.5,
+          viewport.clientWidth / 2,
+          viewport.clientHeight / 2
+        );
+      }
+    );
+
+
+  document
+    .getElementById("reset")
+    .addEventListener(
+      "click",
+      resetView
+    );
+
+
+  /*
+    LOAD THE EXTERNAL SVG
+
+    Because the SVG is loaded through <object>,
+    its internal groups can be accessed once loading
+    has completed.
+  */
+
+  mapObject.addEventListener(
+    "load",
+    () => {
+
+      try {
+
+        svg =
+          mapObject
+            .contentDocument
+            .querySelector("svg");
+
+
+        if (!svg) {
+          throw new Error(
+            "SVG root not found"
+          );
+        }
+
+
+        /*
+          Cache the real burg heraldry.
+        */
+
+        cacheBurgUses();
+
+
+        /*
+          Apply the LOW-ZOOM STATE FIRST.
+
+          This is important for performance:
+          the browser should not initially render
+          every small settlement shield.
+        */
+
+        setDisplay(
+          "stateEmblems",
+          true
+        );
+
+        setDisplay(
+          "provinceEmblems",
+          true
+        );
+
+
+        /*
+          Hide the normal Azgaar burg icons.
+        */
+
+        setDisplay(
+          "burgIcons",
+          false
+        );
+
+
+        /*
+          Hide all small burg heraldry initially.
+        */
+
+        setDisplay(
+          "burgEmblems",
+          false
+        );
+
+
+        /*
+          Large labels remain visible.
+        */
+
+        setDisplay(
+          "labels-state",
+          true
+        );
+
+        setDisplay(
+          "labels-province",
+          true
+        );
+
+        setDisplay(
+          "labels-capital",
+          true
+        );
+
+
+        /*
+          Smaller labels begin disabled.
+        */
+
+        setDisplay(
+          "labels-city",
+          false
+        );
+
+        setDisplay(
+          "labels-fort",
+          false
+        );
+
+        setDisplay(
+          "labels-town",
+          false
+        );
+
+        setDisplay(
+          "labels-village",
+          false
+        );
+
+
+        resize();
+
+        resetView();
+
+
+        status.textContent =
+          "Zoom out = political map • zoom in = settlement detail";
+
+      } catch (error) {
+
+        console.error(error);
+
+        status.textContent =
+          "Map loaded, but layer controls could not be initialized.";
+      }
+    }
+  );
+
+
+  /*
+    Keep the map correctly fitted if the browser
+    window changes size.
+  */
+
+  window.addEventListener(
+    "resize",
+    resize
+  );
+
+
+  /*
+    Prevent the browser from treating the embedded
+    SVG like a normal draggable image.
+  */
+
+  mapObject.addEventListener(
+    "dragstart",
+    event => {
+      event.preventDefault();
+    }
+  );
+
+})();
+</script>
+
+</body>
+</html>
